@@ -1,4 +1,5 @@
 import { ErrorCodes, errorShape } from "./protocol/index.js";
+import { addonHandlers } from "./server-methods/addons.js";
 import { agentHandlers } from "./server-methods/agent.js";
 import { agentsHandlers } from "./server-methods/agents.js";
 import { browserHandlers } from "./server-methods/browser.js";
@@ -63,6 +64,7 @@ const READ_METHODS = new Set([
   "tts.status",
   "tts.providers",
   "models.list",
+  "addons.list",
   "agents.list",
   "agent.identity.get",
   "skills.status",
@@ -199,6 +201,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...sendHandlers,
   ...usageHandlers,
   ...agentHandlers,
+  ...addonHandlers,
   ...agentsHandlers,
   ...browserHandlers,
 };

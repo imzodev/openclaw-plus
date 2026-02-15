@@ -350,6 +350,7 @@ export async function startGatewayServer(
     removeChatRun,
     chatAbortControllers,
     toolEventRecipients,
+    addonRegistry,
   } = await createGatewayRuntimeState({
     cfg: cfgAtStart,
     bindHost,
@@ -596,6 +597,7 @@ export async function startGatewayServer(
       markChannelLoggedOut,
       wizardRunner,
       broadcastVoiceWakeChanged,
+      addonRegistry,
     },
   });
   logGatewayStartup({
