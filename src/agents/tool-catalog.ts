@@ -26,6 +26,7 @@ type CoreToolDefinition = {
 
 const CORE_TOOL_SECTION_ORDER: Array<{ id: string; label: string }> = [
   { id: "fs", label: "Files" },
+  { id: "code", label: "Code" },
   { id: "runtime", label: "Runtime" },
   { id: "web", label: "Web" },
   { id: "memory", label: "Memory" },
@@ -65,6 +66,27 @@ const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
     label: "apply_patch",
     description: "Patch files (OpenAI)",
     sectionId: "fs",
+    profiles: ["coding"],
+  },
+  {
+    id: "code_edit",
+    label: "code_edit",
+    description: "Smart code edit (fuzzy matching)",
+    sectionId: "code",
+    profiles: ["coding"],
+  },
+  {
+    id: "code_write",
+    label: "code_write",
+    description: "Write code with syntax check",
+    sectionId: "code",
+    profiles: ["coding"],
+  },
+  {
+    id: "code_apply_diff",
+    label: "code_apply_diff",
+    description: "Line-anchored diffs",
+    sectionId: "code",
     profiles: ["coding"],
   },
   {
