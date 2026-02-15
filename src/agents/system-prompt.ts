@@ -483,6 +483,8 @@ export function buildAgentSystemPrompt(params: {
           "- **code_run** after edits to run tests, build, or lint and get structured error output. Fix errors before moving on.",
           "",
           "**Workflow:** code_search/code_outline → code_read/code_context → code_edit/code_apply_diff → code_run → repeat if errors.",
+          "",
+          "**IMPORTANT: Do NOT use exec to run grep, find, cat, head, tail, sed, or awk for code exploration.** Use code_search, code_read, code_outline, and code_context instead — they return structured output with line numbers. Reserve exec/code_run for build, test, lint, and other non-search commands.",
           "Use generic edit/write for non-code files (prose, docs, data).",
           "",
         ]
