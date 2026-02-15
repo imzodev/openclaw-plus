@@ -243,6 +243,12 @@ export function buildAgentSystemPrompt(params: {
     session_status:
       "Show a /status-equivalent status card (usage + time + Reasoning/Verbose/Elevated); use for model-use questions (📊 session_status); optional per-session model override",
     image: "Analyze an image with the configured image model",
+    code_edit:
+      "Smart code edit with fuzzy matching (exact → whitespace-tolerant → token-based). Prefer over edit for code. Always read first.",
+    code_write:
+      "Write a complete code file with post-write syntax validation. Prefer over write for code files.",
+    code_apply_diff:
+      "Apply line-number-anchored SEARCH/REPLACE diff blocks. Supports multiple blocks per call. Always read first to get line numbers.",
   };
 
   const toolOrder = [
@@ -250,6 +256,9 @@ export function buildAgentSystemPrompt(params: {
     "write",
     "edit",
     "apply_patch",
+    "code_edit",
+    "code_write",
+    "code_apply_diff",
     "grep",
     "find",
     "ls",

@@ -22,6 +22,12 @@ import {
   type ProcessToolDefaults,
 } from "./bash-tools.js";
 import { listChannelAgentTools } from "./channel-tools.js";
+import {
+  createCodeApplyDiffTool,
+  createSandboxedCodeApplyDiffTool,
+} from "./code-apply-diff-tool.js";
+import { createCodeEditTool, createSandboxedCodeEditTool } from "./code-edit-tool.js";
+import { createCodeWriteTool, createSandboxedCodeWriteTool } from "./code-write-tool.js";
 import { createOpenClawTools } from "./openclaw-tools.js";
 import { wrapToolWithAbortSignal } from "./pi-tools.abort.js";
 import { wrapToolWithBeforeToolCallHook } from "./pi-tools.before-tool-call.js";
@@ -342,6 +348,29 @@ export function createOpenClawCodingTools(options?: {
         : []
       : []),
     ...(applyPatchTool ? [applyPatchTool as unknown as AnyAgentTool] : []),
+    // code_* tools: coding-optimized edit/write/diff with fuzzy matching and rich errors
+    ...(sandboxRoot
+      ? allowWorkspaceWrites
+        ? [
+            createSandboxedCodeEditTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+            createSandboxedCodeWriteTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+            createSandboxedCodeApplyDiffTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+          ]
+        : []
+      : [
+          createCodeEditTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeWriteTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeApplyDiffTool(workspaceRoot) as unknown as AnyAgentTool,
+        ]),
     execTool as unknown as AnyAgentTool,
     processTool as unknown as AnyAgentTool,
     // Channel docking: include channel-defined agent tools (login, etc.).
