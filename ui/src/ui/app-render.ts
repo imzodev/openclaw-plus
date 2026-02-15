@@ -449,11 +449,16 @@ export function renderApp(state: AppViewState) {
                   if (!configValue) {
                     return;
                   }
-                  const list = (configValue as { agents?: { list?: unknown[] } }).agents?.list;
-                  if (!Array.isArray(list)) {
-                    return;
+                  const cfg = configValue as { agents?: { list?: unknown[] } };
+                  if (!cfg.agents) {
+                    configValue.agents = { list: [] };
                   }
-                  const index = list.findIndex(
+                  const agents = (configValue as { agents: { list?: unknown[] } }).agents;
+                  if (!Array.isArray(agents.list)) {
+                    agents.list = [];
+                  }
+                  const list = agents.list;
+                  let index = list.findIndex(
                     (entry) =>
                       entry &&
                       typeof entry === "object" &&
@@ -461,7 +466,9 @@ export function renderApp(state: AppViewState) {
                       (entry as { id?: string }).id === agentId,
                   );
                   if (index < 0) {
-                    return;
+                    list.push({ id: agentId });
+                    index = list.length - 1;
+                    updateConfigFormValue(state, ["agents", "list"], list);
                   }
                   const basePath = ["agents", "list", index, "tools"];
                   if (profile) {
@@ -477,11 +484,16 @@ export function renderApp(state: AppViewState) {
                   if (!configValue) {
                     return;
                   }
-                  const list = (configValue as { agents?: { list?: unknown[] } }).agents?.list;
-                  if (!Array.isArray(list)) {
-                    return;
+                  const cfg = configValue as { agents?: { list?: unknown[] } };
+                  if (!cfg.agents) {
+                    configValue.agents = { list: [] };
                   }
-                  const index = list.findIndex(
+                  const agents = (configValue as { agents: { list?: unknown[] } }).agents;
+                  if (!Array.isArray(agents.list)) {
+                    agents.list = [];
+                  }
+                  const list = agents.list;
+                  let index = list.findIndex(
                     (entry) =>
                       entry &&
                       typeof entry === "object" &&
@@ -489,7 +501,9 @@ export function renderApp(state: AppViewState) {
                       (entry as { id?: string }).id === agentId,
                   );
                   if (index < 0) {
-                    return;
+                    list.push({ id: agentId });
+                    index = list.length - 1;
+                    updateConfigFormValue(state, ["agents", "list"], list);
                   }
                   const basePath = ["agents", "list", index, "tools"];
                   if (alsoAllow.length > 0) {
