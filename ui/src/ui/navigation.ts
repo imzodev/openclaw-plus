@@ -1,4 +1,5 @@
 import type { IconName } from "./icons.js";
+import { getRegisteredAddons, getAddonById } from "./addons/registry.ts";
 
 export const TAB_GROUPS = [
   { label: "Chat", tabs: ["chat"] },
@@ -10,7 +11,7 @@ export const TAB_GROUPS = [
   { label: "Settings", tabs: ["config", "debug", "logs"] },
 ] as const;
 
-export type Tab =
+export type StaticTab =
   | "agents"
   | "overview"
   | "channels"
@@ -25,7 +26,25 @@ export type Tab =
   | "debug"
   | "logs";
 
-const TAB_PATHS: Record<Tab, string> = {
+export type AddonTab = `addon:${string}`;
+
+export type Tab = StaticTab | AddonTab;
+
+export const ADDON_TAB_PREFIX = "addon:";
+
+export function isAddonTab(tab: string): tab is AddonTab {
+  return tab.startsWith(ADDON_TAB_PREFIX);
+}
+
+export function addonTabId(tab: AddonTab): string {
+  return tab.slice(ADDON_TAB_PREFIX.length);
+}
+
+export function addonTabFor(addonId: string): AddonTab {
+  return `${ADDON_TAB_PREFIX}${addonId}`;
+}
+
+const TAB_PATHS: Record<StaticTab, string> = {
   agents: "/agents",
   overview: "/overview",
   channels: "/channels",
@@ -76,6 +95,10 @@ export function normalizePath(path: string): string {
 
 export function pathForTab(tab: Tab, basePath = ""): string {
   const base = normalizeBasePath(basePath);
+  if (isAddonTab(tab)) {
+    const path = `/addons/${addonTabId(tab)}`;
+    return base ? `${base}${path}` : path;
+  }
   const path = TAB_PATHS[tab];
   return base ? `${base}${path}` : path;
 }
@@ -97,7 +120,17 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   if (normalized === "/") {
     return "chat";
   }
-  return PATH_TO_TAB.get(normalized) ?? null;
+  const staticTab = PATH_TO_TAB.get(normalized);
+  if (staticTab) {
+    return staticTab;
+  }
+  if (normalized.startsWith("/addons/")) {
+    const addonId = normalized.slice("/addons/".length);
+    if (addonId && getAddonById(addonId)) {
+      return addonTabFor(addonId);
+    }
+  }
+  return null;
 }
 
 export function inferBasePathFromPathname(pathname: string): string {
@@ -123,6 +156,10 @@ export function inferBasePathFromPathname(pathname: string): string {
 }
 
 export function iconForTab(tab: Tab): IconName {
+  if (isAddonTab(tab)) {
+    const addon = getAddonById(addonTabId(tab));
+    return (addon?.icon as IconName) ?? "puzzle";
+  }
   switch (tab) {
     case "agents":
       return "folder";
@@ -156,6 +193,10 @@ export function iconForTab(tab: Tab): IconName {
 }
 
 export function titleForTab(tab: Tab) {
+  if (isAddonTab(tab)) {
+    const addon = getAddonById(addonTabId(tab));
+    return addon?.name ?? addonTabId(tab);
+  }
   switch (tab) {
     case "agents":
       return "Agents";
@@ -189,6 +230,10 @@ export function titleForTab(tab: Tab) {
 }
 
 export function subtitleForTab(tab: Tab) {
+  if (isAddonTab(tab)) {
+    const addon = getAddonById(addonTabId(tab));
+    return addon?.description ?? "";
+  }
   switch (tab) {
     case "agents":
       return "Manage agent workspaces, tools, and identities.";
@@ -219,4 +264,25 @@ export function subtitleForTab(tab: Tab) {
     default:
       return "";
   }
+}
+
+export type TabGroup = { label: string; tabs: readonly Tab[] };
+
+export function getTabGroups(): TabGroup[] {
+  const addonTabs = getRegisteredAddons().map((a) => addonTabFor(a.id));
+  const groups: TabGroup[] = TAB_GROUPS.map((g) => ({
+    label: g.label,
+    tabs: g.tabs as readonly Tab[],
+  }));
+  if (addonTabs.length > 0) {
+    // Insert Addons group before Settings
+    const settingsIndex = groups.findIndex((g) => g.label === "Settings");
+    const addonsGroup: TabGroup = { label: "Addons", tabs: addonTabs };
+    if (settingsIndex >= 0) {
+      groups.splice(settingsIndex, 0, addonsGroup);
+    } else {
+      groups.push(addonsGroup);
+    }
+  }
+  return groups;
 }
