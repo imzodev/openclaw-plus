@@ -265,6 +265,16 @@ export function buildAgentSystemPrompt(params: {
       "Write a complete code file with post-write syntax validation. Prefer over write for code files.",
     code_apply_diff:
       "Apply line-number-anchored SEARCH/REPLACE diff blocks. Supports multiple blocks per call. Always read first to get line numbers.",
+    code_search:
+      "Search code across the workspace with ripgrep. Returns matching lines with file paths, line numbers, and context. Use to find definitions, usages, and patterns.",
+    code_outline:
+      "Extract a structural outline of a source file: functions, classes, methods, types with line numbers. Faster than reading the whole file.",
+    code_context:
+      "Gather rich context around a code location: imports, the focused code block, and symbol references across the workspace.",
+    code_run:
+      "Run build/test/lint commands with structured error extraction. Use after editing to verify changes.",
+    code_read:
+      "Read source files with line numbers. Supports full file, slice (offset+limit), and semantic block extraction (anchor_line auto-expands to the enclosing function/class).",
   };
 
   const toolOrder = [
@@ -275,6 +285,11 @@ export function buildAgentSystemPrompt(params: {
     "code_edit",
     "code_write",
     "code_apply_diff",
+    "code_search",
+    "code_outline",
+    "code_context",
+    "code_run",
+    "code_read",
     "grep",
     "find",
     "ls",
@@ -451,12 +466,24 @@ export function buildAgentSystemPrompt(params: {
     ...(availableTools.has("code_edit")
       ? [
           "## Coding",
-          "When editing, writing, or patching **code files** (source, config, scripts), prefer the code_* tools over the generic edit/write tools:",
-          "- **code_edit** over edit — fuzzy matching recovers from minor whitespace/indentation mismatches instead of failing.",
-          "- **code_write** over write — validates syntax after writing and returns line-numbered output.",
-          "- **code_apply_diff** for multi-site edits in a single file — accepts line-number-anchored SEARCH/REPLACE blocks.",
-          "Always **read the file first** before using code_edit or code_apply_diff so you have accurate content and line numbers.",
-          "Use the generic edit/write for non-code files (prose, docs, data) where fuzzy matching and syntax checks are unnecessary.",
+          "When working on **code** (source, config, scripts), prefer the code_* tools over generic tools:",
+          "",
+          "**Context gathering (do this first):**",
+          "- **code_read** instead of read for ANY source/config/script file. It always returns line numbers (needed for code_edit and code_apply_diff). Use anchor_line to auto-expand to the enclosing function/class. Do NOT use the generic read tool for code files.",
+          "- **code_search** instead of grep to find definitions, usages, and patterns across the workspace.",
+          "- **code_outline** to see a file's structure (functions, classes, types with line numbers) without reading every line.",
+          "- **code_context** to gather imports, the focused code block, and symbol references before editing.",
+          "",
+          "**Editing:**",
+          "- **code_edit** over edit — fuzzy matching recovers from minor whitespace/indentation mismatches.",
+          "- **code_write** over write — validates syntax after writing.",
+          "- **code_apply_diff** for multi-site edits in a single file — line-number-anchored SEARCH/REPLACE blocks.",
+          "",
+          "**Verification:**",
+          "- **code_run** after edits to run tests, build, or lint and get structured error output. Fix errors before moving on.",
+          "",
+          "**Workflow:** code_search/code_outline → code_read/code_context → code_edit/code_apply_diff → code_run → repeat if errors.",
+          "Use generic edit/write for non-code files (prose, docs, data).",
           "",
         ]
       : []),

@@ -28,7 +28,12 @@ import {
   createCodeApplyDiffTool,
   createSandboxedCodeApplyDiffTool,
 } from "./code-apply-diff-tool.js";
+import { createCodeContextTool, createSandboxedCodeContextTool } from "./code-context-tool.js";
 import { createCodeEditTool, createSandboxedCodeEditTool } from "./code-edit-tool.js";
+import { createCodeOutlineTool, createSandboxedCodeOutlineTool } from "./code-outline-tool.js";
+import { createCodeReadTool, createSandboxedCodeReadTool } from "./code-read-tool.js";
+import { createCodeRunTool } from "./code-run-tool.js";
+import { createCodeSearchTool } from "./code-search-tool.js";
 import { createCodeWriteTool, createSandboxedCodeWriteTool } from "./code-write-tool.js";
 import { resolveImageSanitizationLimits } from "./image-sanitization.js";
 import { createOpenClawTools } from "./openclaw-tools.js";
@@ -456,12 +461,31 @@ export function createOpenClawCodingTools(options?: {
               root: sandboxRoot,
               bridge: sandboxFsBridge!,
             }) as unknown as AnyAgentTool,
+            createSandboxedCodeOutlineTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+            createSandboxedCodeContextTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+            createSandboxedCodeReadTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+            createCodeSearchTool(sandboxRoot) as unknown as AnyAgentTool,
+            createCodeRunTool(sandboxRoot) as unknown as AnyAgentTool,
           ]
         : []
       : [
           createCodeEditTool(workspaceRoot) as unknown as AnyAgentTool,
           createCodeWriteTool(workspaceRoot) as unknown as AnyAgentTool,
           createCodeApplyDiffTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeOutlineTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeContextTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeReadTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeSearchTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeRunTool(workspaceRoot) as unknown as AnyAgentTool,
         ]),
     execTool as unknown as AnyAgentTool,
     processTool as unknown as AnyAgentTool,
