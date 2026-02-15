@@ -80,6 +80,7 @@ export async function createGatewayRuntimeState(params: {
   chatAbortControllers: Map<string, ChatAbortControllerEntry>;
   toolEventRecipients: ReturnType<typeof createToolEventRecipientRegistry>;
   addonRegistry: AddonRegistry;
+  refreshAddonRegistry: () => AddonRegistry;
 }> {
   let canvasHost: CanvasHostHandler | null = null;
   if (params.canvasHostEnabled) {
@@ -119,6 +120,10 @@ export async function createGatewayRuntimeState(params: {
   });
 
   let addonRegistry: AddonRegistry = loadAddonRegistry();
+  const refreshAddonRegistry = () => {
+    addonRegistry = loadAddonRegistry();
+    return addonRegistry;
+  };
   const handleAddonsRequest = createAddonsHttpHandler({
     getRegistry: () => addonRegistry,
   });
@@ -210,5 +215,6 @@ export async function createGatewayRuntimeState(params: {
     chatAbortControllers,
     toolEventRecipients,
     addonRegistry,
+    refreshAddonRegistry,
   };
 }

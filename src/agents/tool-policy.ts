@@ -30,7 +30,7 @@ export const TOOL_GROUPS: Record<string, string[]> = {
     "session_status",
   ],
   // UI helpers
-  "group:ui": ["browser", "canvas"],
+  "group:ui": ["browser", "canvas", "ui_addon"],
   // Automation + infra
   "group:automation": ["cron", "gateway"],
   // Messaging surface
@@ -57,6 +57,7 @@ export const TOOL_GROUPS: Record<string, string[]> = {
     "web_search",
     "web_fetch",
     "image",
+    "ui_addon",
   ],
 };
 

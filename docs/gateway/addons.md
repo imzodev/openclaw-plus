@@ -199,7 +199,9 @@ If no addons are discovered, the Addons group is hidden.
 
 ## Gateway RPC
 
-The `addons.list` method returns all discovered addons:
+### addons.list
+
+Returns all discovered addons:
 
 ```json
 {
@@ -218,6 +220,58 @@ The `addons.list` method returns all discovered addons:
   ]
 }
 ```
+
+### addons.create
+
+Create a new addon programmatically. Writes `addon.json` and the entry file to
+the global addons directory, then refreshes the registry so the addon is
+available immediately.
+
+Parameters:
+
+| Parameter     | Type   | Required | Description                                           |
+| ------------- | ------ | -------- | ----------------------------------------------------- |
+| `id`          | string | yes      | Unique addon id (lowercase, hyphens/dots/underscores) |
+| `code`        | string | yes      | JavaScript source for the entry file                  |
+| `name`        | string | no       | Display name (defaults to id)                         |
+| `description` | string | no       | Short description for the sidebar                     |
+| `icon`        | string | no       | Lucide icon name (defaults to `"puzzle"`)             |
+| `version`     | string | no       | Version string (defaults to `"0.1.0"`)                |
+
+Example request:
+
+```json
+{
+  "method": "addons.create",
+  "params": {
+    "id": "my-dashboard",
+    "name": "My Dashboard",
+    "description": "Custom monitoring panel.",
+    "icon": "bar-chart",
+    "code": "export default class MyDashboard extends HTMLElement {\n  connectedCallback() {\n    const shadow = this.attachShadow({ mode: 'open' });\n    shadow.innerHTML = '<p>Hello from my addon</p>';\n  }\n}"
+  }
+}
+```
+
+### addons.delete
+
+Remove an addon by id. Deletes the addon directory and refreshes the registry.
+
+Parameters:
+
+| Parameter | Type   | Required | Description        |
+| --------- | ------ | -------- | ------------------ |
+| `id`      | string | yes      | Addon id to delete |
+
+## Agent tool
+
+The agent has a built-in `ui_addon` tool that wraps these RPC methods. When you
+ask the agent to build a dashboard, panel, or interactive UI, it uses this tool
+to create an addon that appears as a tab in the Control UI.
+
+The agent can also use `ctx.client.request(method, params)` inside the addon
+code to call any Gateway RPC method, enabling addons that communicate with the
+backend (e.g. fetching session data, sending messages, or querying health).
 
 ## Tips
 

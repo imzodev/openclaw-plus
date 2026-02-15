@@ -58,6 +58,7 @@ export const TOOL_SECTIONS = [
     tools: [
       { id: "browser", label: "browser", description: "Control web browser" },
       { id: "canvas", label: "canvas", description: "Control canvases" },
+      { id: "ui_addon", label: "ui_addon", description: "Create/manage UI addons" },
     ],
   },
   {

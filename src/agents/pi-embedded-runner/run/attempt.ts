@@ -324,6 +324,10 @@ export async function runEmbeddedAttempt(
           disableMessageTool: params.disableMessageTool,
         });
     const tools = sanitizeToolsForGoogle({ tools: toolsRaw, provider: params.provider });
+    log.info("tool list for run", {
+      toolNames: tools.map((t) => t.name).join(", "),
+      count: tools.length,
+    });
     logToolSchemasForGoogle({ tools, provider: params.provider });
 
     const machineName = await getMachineDisplayName();
