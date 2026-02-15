@@ -384,6 +384,10 @@ export async function compactEmbeddedPiSessionDirect(
       modelAuthMode: resolveModelAuthMode(model.provider, params.config),
     });
     const tools = sanitizeToolsForGoogle({ tools: toolsRaw, provider });
+    log.info("tool list for run", {
+      toolNames: tools.map((t) => t.name).join(", "),
+      count: tools.length,
+    });
     logToolSchemasForGoogle({ tools, provider });
     const machineName = await getMachineDisplayName();
     const runtimeChannel = normalizeMessageChannel(params.messageChannel ?? params.messageProvider);
