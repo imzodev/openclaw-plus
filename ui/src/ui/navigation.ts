@@ -126,8 +126,12 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
     return staticTab;
   }
   if (normalized.startsWith("/addons/")) {
-    const addonId = normalized.slice("/addons/".length);
-    if (addonId && getAddonById(addonId)) {
+    const addonPath = normalized.slice("/addons/".length);
+    const addonId = addonPath.split("/").filter(Boolean)[0] ?? "";
+    if (addonId && (getAddonById(addonId) || !addonPath.includes("/"))) {
+      return addonTabFor(addonId);
+    }
+    if (addonId) {
       return addonTabFor(addonId);
     }
   }
@@ -148,7 +152,8 @@ export function inferBasePathFromPathname(pathname: string): string {
   }
   for (let i = 0; i < segments.length; i++) {
     const candidate = `/${segments.slice(i).join("/")}`.toLowerCase();
-    if (PATH_TO_TAB.has(candidate)) {
+    const isAddonRoute = candidate === "/addons" || candidate.startsWith("/addons/");
+    if (PATH_TO_TAB.has(candidate) || isAddonRoute) {
       const prefix = segments.slice(0, i);
       return prefix.length ? `/${prefix.join("/")}` : "";
     }
