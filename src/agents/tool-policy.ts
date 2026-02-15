@@ -76,7 +76,7 @@ const TOOL_PROFILES: Record<ToolProfileId, ToolProfilePolicy> = {
     allow: ["session_status"],
   },
   coding: {
-    allow: ["group:fs", "group:code", "group:runtime", "group:sessions", "group:memory", "image"],
+    deny: ["read", "write", "edit", "apply_patch"],
   },
   messaging: {
     allow: [
