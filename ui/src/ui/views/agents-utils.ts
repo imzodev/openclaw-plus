@@ -24,6 +24,11 @@ export const TOOL_SECTIONS = [
       { id: "code_edit", label: "code_edit", description: "Smart code edit (fuzzy matching)" },
       { id: "code_write", label: "code_write", description: "Write code with syntax check" },
       { id: "code_apply_diff", label: "code_apply_diff", description: "Line-anchored diffs" },
+      { id: "code_search", label: "code_search", description: "Search code patterns (ripgrep)" },
+      { id: "code_outline", label: "code_outline", description: "File structure overview" },
+      { id: "code_context", label: "code_context", description: "Gather imports, refs, context" },
+      { id: "code_run", label: "code_run", description: "Run build/test with error parsing" },
+      { id: "code_read", label: "code_read", description: "Read code with line numbers" },
     ],
   },
   {

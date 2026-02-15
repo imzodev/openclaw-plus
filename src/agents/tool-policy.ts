@@ -19,7 +19,16 @@ export const TOOL_GROUPS: Record<string, string[]> = {
   // Basic workspace/file tools
   "group:fs": ["read", "write", "edit", "apply_patch"],
   // Code-optimized editing tools (fuzzy matching, syntax validation, line-anchored diffs)
-  "group:code": ["code_edit", "code_write", "code_apply_diff"],
+  "group:code": [
+    "code_edit",
+    "code_write",
+    "code_apply_diff",
+    "code_search",
+    "code_outline",
+    "code_context",
+    "code_run",
+    "code_read",
+  ],
   // Host/runtime execution tools
   "group:runtime": ["exec", "process"],
   // Session management tools
