@@ -1,11 +1,11 @@
 import { createHmac, createHash } from "node:crypto";
 import type { ReasoningLevel, ThinkLevel } from "../auto-reply/thinking.js";
-import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import type { MemoryCitationsMode } from "../config/types.memory.js";
-import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 import type { ResolvedTimeFormat } from "./date-time.js";
 import type { EmbeddedContextFile } from "./pi-embedded-helpers.js";
 import type { EmbeddedSandboxInfo } from "./pi-embedded-runner/types.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
+import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 import { sanitizeForPromptLiteral } from "./sanitize-for-prompt.js";
 
 /**
@@ -259,6 +259,12 @@ export function buildAgentSystemPrompt(params: {
     session_status:
       "Show a /status-equivalent status card (usage + time + Reasoning/Verbose/Elevated); use for model-use questions (📊 session_status); optional per-session model override",
     image: "Analyze an image with the configured image model",
+    code_edit:
+      "Smart code edit with fuzzy matching (exact → whitespace-tolerant → token-based). Prefer over edit for code. Always read first.",
+    code_write:
+      "Write a complete code file with post-write syntax validation. Prefer over write for code files.",
+    code_apply_diff:
+      "Apply line-number-anchored SEARCH/REPLACE diff blocks. Supports multiple blocks per call. Always read first to get line numbers.",
   };
 
   const toolOrder = [
@@ -266,6 +272,9 @@ export function buildAgentSystemPrompt(params: {
     "write",
     "edit",
     "apply_patch",
+    "code_edit",
+    "code_write",
+    "code_apply_diff",
     "grep",
     "find",
     "ls",
