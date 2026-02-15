@@ -87,6 +87,7 @@ export type GatewayRequestContext = {
   ) => Promise<void>;
   broadcastVoiceWakeChanged: (triggers: string[]) => void;
   addonRegistry: AddonRegistry;
+  refreshAddonRegistry: () => AddonRegistry;
 };
 
 export type GatewayRequestOptions = {

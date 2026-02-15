@@ -1,11 +1,11 @@
 import { createHmac, createHash } from "node:crypto";
 import type { ReasoningLevel, ThinkLevel } from "../auto-reply/thinking.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import type { MemoryCitationsMode } from "../config/types.memory.js";
+import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 import type { ResolvedTimeFormat } from "./date-time.js";
 import type { EmbeddedContextFile } from "./pi-embedded-helpers.js";
 import type { EmbeddedSandboxInfo } from "./pi-embedded-runner/types.js";
-import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
-import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 import { sanitizeForPromptLiteral } from "./sanitize-for-prompt.js";
 
 /**
@@ -275,6 +275,8 @@ export function buildAgentSystemPrompt(params: {
       "Run build/test/lint commands with structured error extraction. Use after editing to verify changes.",
     code_read:
       "Read source files with line numbers. Supports full file, slice (offset+limit), and semantic block extraction (anchor_line auto-expands to the enclosing function/class).",
+    ui_addon:
+      "Create, delete, or list UI addons (custom web panels in the Control UI). Use action='create' with id + code (JS default-exporting an HTMLElement subclass). The addon appears as a new tab in the browser Control UI immediately.",
   };
 
   const toolOrder = [
@@ -310,6 +312,7 @@ export function buildAgentSystemPrompt(params: {
     "subagents",
     "session_status",
     "image",
+    "ui_addon",
   ];
 
   const rawToolNames = (params.toolNames ?? []).map((tool) => tool.trim());
@@ -519,6 +522,19 @@ export function buildAgentSystemPrompt(params: {
         ].join("\n")
       : "",
     hasGateway && !isMinimal ? "" : "",
+    // UI Addons guidance (only when the tool is available)
+    availableTools.has("ui_addon") && !isMinimal ? "## UI Addons" : "",
+    availableTools.has("ui_addon") && !isMinimal
+      ? [
+          "IMPORTANT: When the user says 'addon' or asks you to build a dashboard, panel, widget, monitor, tracker, or any interactive UI, you MUST use the ui_addon tool with action='create'. NEVER use the write tool to create HTML files for this purpose.",
+          "An addon is a JavaScript ES module that default-exports an HTMLElement subclass. It appears as a tab in the browser Control UI immediately after creation.",
+          "Structure: the code parameter must contain `export default class extends HTMLElement { connectedCallback() { const shadow = this.attachShadow({ mode: 'open' }); /* build UI here */ } }`. Use Shadow DOM for style isolation.",
+          "Context: implement `setContext(ctx)` to receive `ctx.client` (gateway RPC client — call `ctx.client.request(method, params)` for any gateway RPC like 'health', 'sessions.list', 'chat.send'), `ctx.theme` ('light'|'dark'), `ctx.agentId`, `ctx.navigate(tab)`.",
+          "Keep the code self-contained in a single JS string. Inline all styles and logic.",
+          "Example: ui_addon action='create' id='my-panel' name='My Panel' code='export default class extends HTMLElement { connectedCallback() { this.attachShadow({mode:\"open\"}).innerHTML = \"<h1>Hello</h1>\"; } }'",
+        ].join("\n")
+      : "",
+    availableTools.has("ui_addon") && !isMinimal ? "" : "",
     "",
     // Skip model aliases for subagent/none modes
     params.modelAliasLines && params.modelAliasLines.length > 0 && !isMinimal
