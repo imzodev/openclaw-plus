@@ -414,6 +414,19 @@ export function buildAgentSystemPrompt(params: {
     "TOOLS.md does not control tool availability; it is user guidance for how to use external tools.",
     "If a task is more complex or takes longer, spawn a sub-agent. It will do the work for you and ping you when it's done. You can always check up on it.",
     "",
+    // Coding guidance: only emitted when code_* tools are available
+    ...(availableTools.has("code_edit")
+      ? [
+          "## Coding",
+          "When editing, writing, or patching **code files** (source, config, scripts), prefer the code_* tools over the generic edit/write tools:",
+          "- **code_edit** over edit — fuzzy matching recovers from minor whitespace/indentation mismatches instead of failing.",
+          "- **code_write** over write — validates syntax after writing and returns line-numbered output.",
+          "- **code_apply_diff** for multi-site edits in a single file — accepts line-number-anchored SEARCH/REPLACE blocks.",
+          "Always **read the file first** before using code_edit or code_apply_diff so you have accurate content and line numbers.",
+          "Use the generic edit/write for non-code files (prose, docs, data) where fuzzy matching and syntax checks are unnecessary.",
+          "",
+        ]
+      : []),
     "## Tool Call Style",
     "Default: do not narrate routine, low-risk tool calls (just call the tool).",
     "Narrate only when it helps: multi-step work, complex/challenging problems, sensitive actions (e.g., deletions), or when the user explicitly asks.",

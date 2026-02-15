@@ -18,6 +18,8 @@ export const TOOL_GROUPS: Record<string, string[]> = {
   "group:web": ["web_search", "web_fetch"],
   // Basic workspace/file tools
   "group:fs": ["read", "write", "edit", "apply_patch"],
+  // Code-optimized editing tools (fuzzy matching, syntax validation, line-anchored diffs)
+  "group:code": ["code_edit", "code_write", "code_apply_diff"],
   // Host/runtime execution tools
   "group:runtime": ["exec", "process"],
   // Session management tools
@@ -65,7 +67,7 @@ const TOOL_PROFILES: Record<ToolProfileId, ToolProfilePolicy> = {
     allow: ["session_status"],
   },
   coding: {
-    allow: ["group:fs", "group:runtime", "group:sessions", "group:memory", "image"],
+    allow: ["group:fs", "group:code", "group:runtime", "group:sessions", "group:memory", "image"],
   },
   messaging: {
     allow: [

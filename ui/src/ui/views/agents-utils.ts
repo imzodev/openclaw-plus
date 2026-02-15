@@ -18,6 +18,15 @@ export const TOOL_SECTIONS = [
     ],
   },
   {
+    id: "code",
+    label: "Code",
+    tools: [
+      { id: "code_edit", label: "code_edit", description: "Smart code edit (fuzzy matching)" },
+      { id: "code_write", label: "code_write", description: "Write code with syntax check" },
+      { id: "code_apply_diff", label: "code_apply_diff", description: "Line-anchored diffs" },
+    ],
+  },
+  {
     id: "runtime",
     label: "Runtime",
     tools: [
