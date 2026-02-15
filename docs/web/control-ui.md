@@ -78,6 +78,7 @@ you revoke it with `openclaw devices revoke --device <id> --role <role>`. See
 - Debug: status/health/models snapshots + event log + manual RPC calls (`status`, `health`, `models.list`)
 - Logs: live tail of gateway file logs with filter/export (`logs.tail`)
 - Update: run a package/git update + restart (`update.run`) with a restart report
+- [UI Addons](/gateway/addons): custom panels loaded as Web Components from `~/.openclaw/addons/`
 
 Cron jobs panel notes:
 
