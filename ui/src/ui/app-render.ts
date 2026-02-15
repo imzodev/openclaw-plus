@@ -1,6 +1,8 @@
 import { html, nothing } from "lit";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { t } from "../i18n/index.ts";
+import { renderAddonHost } from "./addons/host.ts";
+import type { AddonContext } from "./addons/types.ts";
 import { refreshChatAvatar } from "./app-chat.ts";
 import { renderUsageTab } from "./app-render-usage-tab.ts";
 import { renderChatControls, renderTab, renderThemeToggle } from "./app-render.helpers.ts";
@@ -64,7 +66,15 @@ import {
 } from "./controllers/skills.ts";
 import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "./external-link.ts";
 import { icons } from "./icons.ts";
-import { normalizeBasePath, TAB_GROUPS, subtitleForTab, titleForTab } from "./navigation.ts";
+import {
+  normalizeBasePath,
+  getTabGroups,
+  subtitleForTab,
+  titleForTab,
+  isAddonTab,
+  addonTabId,
+  type Tab,
+} from "./navigation.ts";
 import { renderAgents } from "./views/agents.ts";
 import { renderChannels } from "./views/channels.ts";
 import { renderChat } from "./views/chat.ts";
@@ -256,7 +266,7 @@ export function renderApp(state: AppViewState) {
         </div>
       </header>
       <aside class="nav ${state.settings.navCollapsed ? "nav--collapsed" : ""}">
-        ${TAB_GROUPS.map((group) => {
+        ${getTabGroups().map((group) => {
           const isGroupCollapsed = state.settings.navGroupsCollapsed[group.label] ?? false;
           const hasActiveTab = group.tabs.some((tab) => tab === state.tab);
           return html`
@@ -1148,9 +1158,29 @@ export function renderApp(state: AppViewState) {
               })
             : nothing
         }
+
+        ${
+          isAddonTab(state.tab)
+            ? renderAddonHost({
+                addonId: addonTabId(state.tab),
+                context: addonContext(state, basePath),
+                onStateChange: () => state.requestUpdate(),
+              })
+            : nothing
+        }
       </main>
       ${renderExecApprovalPrompt(state)}
       ${renderGatewayUrlConfirmation(state)}
     </div>
   `;
+}
+
+function addonContext(state: AppViewState, basePath: string): AddonContext {
+  return {
+    client: state.client!,
+    theme: state.themeResolved,
+    agentId: state.agentsSelectedId ?? state.agentsList?.defaultId ?? null,
+    basePath,
+    navigate: (tab) => state.setTab(tab as Tab),
+  };
 }

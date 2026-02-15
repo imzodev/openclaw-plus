@@ -421,6 +421,7 @@ export function createGatewayHttpServer(opts: {
   strictTransportSecurityHeader?: string;
   handleHooksRequest: HooksRequestHandler;
   handlePluginRequest?: HooksRequestHandler;
+  handleAddonsRequest?: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
   resolvedAuth: ResolvedGatewayAuth;
   /** Optional rate limiter for auth brute-force protection. */
   rateLimiter?: AuthRateLimiter;
@@ -441,6 +442,7 @@ export function createGatewayHttpServer(opts: {
     resolvedAuth,
     rateLimiter,
   } = opts;
+  const handleAddonsRequest = opts.handleAddonsRequest;
   const httpServer: HttpServer = opts.tlsOptions
     ? createHttpsServer(opts.tlsOptions, (req, res) => {
         void handleRequest(req, res);
@@ -542,6 +544,24 @@ export function createGatewayHttpServer(opts: {
             rateLimiter,
           })
         ) {
+          return;
+        }
+      }
+      if (handleAddonsRequest) {
+        if (requestPath.startsWith("/__openclaw__/addons/")) {
+          const ok = await authorizeCanvasRequest({
+            req,
+            auth: resolvedAuth,
+            trustedProxies,
+            clients,
+            rateLimiter,
+          });
+          if (!ok.ok) {
+            sendGatewayAuthFailure(res, ok);
+            return;
+          }
+        }
+        if (await handleAddonsRequest(req, res)) {
           return;
         }
       }
