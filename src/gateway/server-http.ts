@@ -61,6 +61,7 @@ import { handleOpenResponsesHttpRequest } from "./openresponses-http.js";
 import { GATEWAY_CLIENT_MODES, normalizeGatewayClientMode } from "./protocol/client-info.js";
 import type { GatewayWsClient } from "./server/ws-types.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
+import { handleWorkspaceFileHttpRequest } from "./workspace-file-http.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
 
@@ -479,6 +480,15 @@ export function createGatewayHttpServer(opts: {
           auth: resolvedAuth,
           trustedProxies,
           allowRealIpFallback,
+          rateLimiter,
+        })
+      ) {
+        return;
+      }
+      if (
+        await handleWorkspaceFileHttpRequest(req, res, {
+          auth: resolvedAuth,
+          trustedProxies,
           rateLimiter,
         })
       ) {
