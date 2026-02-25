@@ -496,6 +496,15 @@ export function createGatewayHttpServer(opts: {
       ) {
         return;
       }
+      if (
+        await handleWorkspaceFileHttpRequest(req, res, {
+          auth: resolvedAuth,
+          trustedProxies,
+          rateLimiter,
+        })
+      ) {
+        return;
+      }
       if (await handleSlackHttpRequest(req, res)) {
         return;
       }
