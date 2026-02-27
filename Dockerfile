@@ -44,10 +44,10 @@ RUN if [ -n "$OPENCLAW_INSTALL_BROWSER" ]; then \
 
 USER node
 COPY --chown=node:node . .
-RUN pnpm build
+RUN NODE_OPTIONS="--max-old-space-size=1024" pnpm build
 # Force pnpm for UI build (Bun may fail on ARM/Synology architectures)
 ENV OPENCLAW_PREFER_PNPM=1
-RUN pnpm ui:build
+RUN NODE_OPTIONS="--max-old-space-size=1024" pnpm ui:build
 
 ENV NODE_ENV=production
 
