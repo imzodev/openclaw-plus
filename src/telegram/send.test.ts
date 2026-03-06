@@ -196,6 +196,10 @@ describe("sendMessageTelegram", () => {
     for (const testCase of cases) {
       botCtorSpy.mockClear();
       loadConfig.mockReturnValue(testCase.cfg);
+      botApi.sendMessage.mockResolvedValue({
+        message_id: 1,
+        chat: { id: "123" },
+      });
       await sendMessageTelegram("123", "hi", testCase.opts);
       expect(botCtorSpy, testCase.name).toHaveBeenCalledWith(
         "tok",
@@ -323,6 +327,40 @@ describe("sendMessageTelegram", () => {
       await sendMessageTelegram("123", testCase.text, { token: "tok", api });
       expect(testCase.sendMessage.mock.calls, testCase.name).toEqual(testCase.expectedCalls);
     }
+  });
+
+  it("fails when Telegram text send returns no message_id", async () => {
+    const sendMessage = vi.fn().mockResolvedValue({
+      chat: { id: "123" },
+    });
+    const api = { sendMessage } as unknown as {
+      sendMessage: typeof sendMessage;
+    };
+
+    await expect(
+      sendMessageTelegram("123", "hi", {
+        token: "tok",
+        api,
+      }),
+    ).rejects.toThrow(/returned no message_id/i);
+  });
+
+  it("fails when Telegram media send returns no message_id", async () => {
+    mockLoadedMedia({ contentType: "image/png", fileName: "photo.png" });
+    const sendPhoto = vi.fn().mockResolvedValue({
+      chat: { id: "123" },
+    });
+    const api = { sendPhoto } as unknown as {
+      sendPhoto: typeof sendPhoto;
+    };
+
+    await expect(
+      sendMessageTelegram("123", "caption", {
+        token: "tok",
+        api,
+        mediaUrl: "https://example.com/photo.png",
+      }),
+    ).rejects.toThrow(/returned no message_id/i);
   });
 
   it("uses native fetch for BAN compatibility when api is omitted", async () => {
@@ -834,6 +872,16 @@ describe("sendMessageTelegram", () => {
         expectedMethod: "sendVoice" as const,
         expectedOptions: { caption: "caption", parse_mode: "HTML" },
       },
+      {
+        name: "normalizes parameterized audio MIME with mixed casing",
+        chatId: "123",
+        text: "caption",
+        mediaUrl: "https://example.com/note",
+        contentType: " Audio/Ogg; codecs=opus ",
+        fileName: "note.ogg",
+        expectedMethod: "sendAudio" as const,
+        expectedOptions: { caption: "caption", parse_mode: "HTML" },
+      },
     ];
 
     for (const testCase of cases) {
@@ -1101,6 +1149,69 @@ describe("sendMessageTelegram", () => {
     });
     expect(res.messageId).toBe("59");
   });
+
+  it("defaults outbound media uploads to 100MB", async () => {
+    const chatId = "123";
+    const sendPhoto = vi.fn().mockResolvedValue({
+      message_id: 60,
+      chat: { id: chatId },
+    });
+    const api = { sendPhoto } as unknown as {
+      sendPhoto: typeof sendPhoto;
+    };
+
+    mockLoadedMedia({
+      buffer: Buffer.from("fake-image"),
+      contentType: "image/jpeg",
+      fileName: "photo.jpg",
+    });
+
+    await sendMessageTelegram(chatId, "photo", {
+      token: "tok",
+      api,
+      mediaUrl: "https://example.com/photo.jpg",
+    });
+
+    expect(loadWebMedia).toHaveBeenCalledWith(
+      "https://example.com/photo.jpg",
+      expect.objectContaining({ maxBytes: 100 * 1024 * 1024 }),
+    );
+  });
+
+  it("uses configured telegram mediaMaxMb for outbound uploads", async () => {
+    const chatId = "123";
+    const sendPhoto = vi.fn().mockResolvedValue({
+      message_id: 61,
+      chat: { id: chatId },
+    });
+    const api = { sendPhoto } as unknown as {
+      sendPhoto: typeof sendPhoto;
+    };
+    loadConfig.mockReturnValue({
+      channels: {
+        telegram: {
+          mediaMaxMb: 42,
+        },
+      },
+    });
+
+    mockLoadedMedia({
+      buffer: Buffer.from("fake-image"),
+      contentType: "image/jpeg",
+      fileName: "photo.jpg",
+    });
+
+    await sendMessageTelegram(chatId, "photo", {
+      token: "tok",
+      api,
+      mediaUrl: "https://example.com/photo.jpg",
+    });
+
+    expect(loadWebMedia).toHaveBeenCalledWith(
+      "https://example.com/photo.jpg",
+      expect.objectContaining({ maxBytes: 42 * 1024 * 1024 }),
+    );
+  });
 });
 
 describe("reactMessageTelegram", () => {
@@ -1241,6 +1352,23 @@ describe("sendStickerTelegram", () => {
     });
     expect(sendSticker).toHaveBeenNthCalledWith(2, chatId, "fileId123", undefined);
     expect(res.messageId).toBe("109");
+  });
+
+  it("fails when sticker send returns no message_id", async () => {
+    const chatId = "123";
+    const sendSticker = vi.fn().mockResolvedValue({
+      chat: { id: chatId },
+    });
+    const api = { sendSticker } as unknown as {
+      sendSticker: typeof sendSticker;
+    };
+
+    await expect(
+      sendStickerTelegram(chatId, "fileId123", {
+        token: "tok",
+        api,
+      }),
+    ).rejects.toThrow(/returned no message_id/i);
   });
 });
 
@@ -1503,6 +1631,20 @@ describe("sendPollTelegram", () => {
     ).rejects.toThrow(/durationHours is not supported/i);
 
     expect(api.sendPoll).not.toHaveBeenCalled();
+  });
+
+  it("fails when poll send returns no message_id", async () => {
+    const api = {
+      sendPoll: vi.fn(async () => ({ chat: { id: 555 }, poll: { id: "p1" } })),
+    };
+
+    await expect(
+      sendPollTelegram(
+        "123",
+        { question: "Q", options: ["A", "B"] },
+        { token: "t", api: api as unknown as Bot["api"] },
+      ),
+    ).rejects.toThrow(/returned no message_id/i);
   });
 });
 

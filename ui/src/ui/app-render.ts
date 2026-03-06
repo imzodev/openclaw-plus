@@ -36,6 +36,7 @@ import {
   validateCronForm,
   hasCronFormErrors,
   normalizeCronFormState,
+  getVisibleCronJobs,
   updateCronJobsFilter,
   updateCronRunsFilter,
 } from "./controllers/cron.ts";
@@ -75,6 +76,7 @@ import {
   addonTabId,
   type Tab,
 } from "./navigation.ts";
+import { resolveConfiguredCronModelSuggestions, sortLocaleStrings } from "./views/agents-utils.ts";
 import { renderAgents } from "./views/agents.ts";
 import { renderChannels } from "./views/channels.ts";
 import { renderChat } from "./views/chat.ts";
@@ -174,7 +176,7 @@ export function renderApp(state: AppViewState) {
     state.agentsList?.defaultId ??
     state.agentsList?.agents?.[0]?.id ??
     null;
-  const cronAgentSuggestions = Array.from(
+  const cronAgentSuggestions = sortLocaleStrings(
     new Set(
       [
         ...(state.agentsList?.agents?.map((entry) => entry.id.trim()) ?? []),
@@ -183,11 +185,12 @@ export function renderApp(state: AppViewState) {
           .filter(Boolean),
       ].filter(Boolean),
     ),
-  ).toSorted((a, b) => a.localeCompare(b));
-  const cronModelSuggestions = Array.from(
+  );
+  const cronModelSuggestions = sortLocaleStrings(
     new Set(
       [
         ...state.cronModelSuggestions,
+        ...resolveConfiguredCronModelSuggestions(configValue),
         ...state.cronJobs
           .map((job) => {
             if (job.payload.kind !== "agentTurn" || typeof job.payload.model !== "string") {
@@ -198,7 +201,8 @@ export function renderApp(state: AppViewState) {
           .filter(Boolean),
       ].filter(Boolean),
     ),
-  ).toSorted((a, b) => a.localeCompare(b));
+  );
+  const visibleCronJobs = getVisibleCronJobs(state);
   const selectedDeliveryChannel =
     state.cronForm.deliveryChannel && state.cronForm.deliveryChannel.trim()
       ? state.cronForm.deliveryChannel.trim()
@@ -220,6 +224,7 @@ export function renderApp(state: AppViewState) {
     ...jobToSuggestions,
     ...accountToSuggestions,
   ]);
+  const accountSuggestions = uniquePreserveOrder(accountToSuggestions);
   const deliveryToSuggestions =
     state.cronForm.deliveryMode === "webhook"
       ? rawDeliveryToSuggestions.filter((value) => isHttpUrl(value))
@@ -452,11 +457,13 @@ export function renderApp(state: AppViewState) {
                 loading: state.cronLoading,
                 jobsLoadingMore: state.cronJobsLoadingMore,
                 status: state.cronStatus,
-                jobs: state.cronJobs,
+                jobs: visibleCronJobs,
                 jobsTotal: state.cronJobsTotal,
                 jobsHasMore: state.cronJobsHasMore,
                 jobsQuery: state.cronJobsQuery,
                 jobsEnabledFilter: state.cronJobsEnabledFilter,
+                jobsScheduleKindFilter: state.cronJobsScheduleKindFilter,
+                jobsLastStatusFilter: state.cronJobsLastStatusFilter,
                 jobsSortBy: state.cronJobsSortBy,
                 jobsSortDir: state.cronJobsSortDir,
                 error: state.cronError,
@@ -486,6 +493,7 @@ export function renderApp(state: AppViewState) {
                 thinkingSuggestions: CRON_THINKING_SUGGESTIONS,
                 timezoneSuggestions: CRON_TIMEZONE_SUGGESTIONS,
                 deliveryToSuggestions,
+                accountSuggestions,
                 onFormChange: (patch) => {
                   state.cronForm = normalizeCronFormState({ ...state.cronForm, ...patch });
                   state.cronFieldErrors = validateCronForm(state.cronForm);
@@ -496,7 +504,7 @@ export function renderApp(state: AppViewState) {
                 onClone: (job) => startCronClone(state, job),
                 onCancelEdit: () => cancelCronEdit(state),
                 onToggle: (job, enabled) => toggleCronJob(state, job, enabled),
-                onRun: (job) => runCronJob(state, job),
+                onRun: (job, mode) => runCronJob(state, job, mode ?? "force"),
                 onRemove: (job) => removeCronJob(state, job),
                 onLoadRuns: async (jobId) => {
                   updateCronRunsFilter(state, { cronRunsScope: "job" });
@@ -505,6 +513,24 @@ export function renderApp(state: AppViewState) {
                 onLoadMoreJobs: () => loadMoreCronJobs(state),
                 onJobsFiltersChange: async (patch) => {
                   updateCronJobsFilter(state, patch);
+                  const shouldReload =
+                    typeof patch.cronJobsQuery === "string" ||
+                    Boolean(patch.cronJobsEnabledFilter) ||
+                    Boolean(patch.cronJobsSortBy) ||
+                    Boolean(patch.cronJobsSortDir);
+                  if (shouldReload) {
+                    await reloadCronJobs(state);
+                  }
+                },
+                onJobsFiltersReset: async () => {
+                  updateCronJobsFilter(state, {
+                    cronJobsQuery: "",
+                    cronJobsEnabledFilter: "all",
+                    cronJobsScheduleKindFilter: "all",
+                    cronJobsLastStatusFilter: "all",
+                    cronJobsSortBy: "nextRunAtMs",
+                    cronJobsSortDir: "asc",
+                  });
                   await reloadCronJobs(state);
                 },
                 onLoadMoreRuns: () => loadMoreCronRuns(state),
