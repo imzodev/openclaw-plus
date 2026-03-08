@@ -12,6 +12,7 @@ import { CANVAS_CAPABILITY_TTL_MS } from "../canvas-capability.js";
 import { authorizeGatewayBearerRequestOrReply } from "../http-auth-helpers.js";
 import { getBearerToken } from "../http-utils.js";
 import { GATEWAY_CLIENT_MODES, normalizeGatewayClientMode } from "../protocol/client-info.js";
+import { getAddonAuthToken } from "./addons-auth.ts";
 import type { GatewayWsClient } from "./ws-types.js";
 
 export function isCanvasPath(pathname: string): boolean {
@@ -83,7 +84,7 @@ export async function authorizeCanvasRequest(params: {
   }
 
   let lastAuthFailure: GatewayAuthResult | null = null;
-  const token = getBearerToken(req);
+  const token = getBearerToken(req) ?? getAddonAuthToken(req);
   if (token) {
     const authResult = await authorizeHttpGatewayConnect({
       auth: { ...auth, allowTailscale: false },
