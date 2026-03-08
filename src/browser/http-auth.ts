@@ -1,5 +1,6 @@
 import type { IncomingMessage } from "node:http";
 import { safeEqualSecret } from "../security/secret-equal.js";
+import { getAddonAuthToken } from "./addons-auth.js";
 
 function firstHeaderValue(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
@@ -39,9 +40,10 @@ export function isAuthorizedBrowserRequest(
   auth: { token?: string; password?: string },
 ): boolean {
   const authorization = firstHeaderValue(req.headers.authorization).trim();
+  const addonToken = getAddonAuthToken(req);
 
   if (auth.token) {
-    const bearer = parseBearerToken(authorization);
+    const bearer = parseBearerToken(authorization) ?? addonToken;
     if (bearer && safeEqualSecret(bearer, auth.token)) {
       return true;
     }
