@@ -149,6 +149,15 @@ describe("tabFromPath", () => {
     expect(tabFromPath("/CHAT")).toBe("chat");
     expect(tabFromPath("/Overview")).toBe("overview");
   });
+
+  it("resolves addon tab ids from addon routes", () => {
+    expect(tabFromPath("/addons/mission-control")).toBe("addon:mission-control");
+    expect(tabFromPath("/addons/mission-control/chat")).toBe("addon:mission-control");
+  });
+
+  it("resolves addon routes under a base path", () => {
+    expect(tabFromPath("/ui/addons/mission-control", "/ui")).toBe("addon:mission-control");
+  });
 });
 
 describe("inferBasePathFromPathname", () => {
@@ -169,6 +178,11 @@ describe("inferBasePathFromPathname", () => {
   it("handles index.html suffix", () => {
     expect(inferBasePathFromPathname("/index.html")).toBe("");
     expect(inferBasePathFromPathname("/ui/index.html")).toBe("/ui");
+  });
+
+  it("infers base path for addon routes", () => {
+    expect(inferBasePathFromPathname("/addons/mission-control")).toBe("");
+    expect(inferBasePathFromPathname("/ui/addons/mission-control")).toBe("/ui");
   });
 });
 

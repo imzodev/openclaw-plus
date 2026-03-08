@@ -1,3 +1,6 @@
+import type { AddonContext } from "./addons/types.ts";
+import type { Tab } from "./navigation.ts";
+import { ensureAddonMounted } from "./addons/host.ts";
 import { connectGateway } from "./app-gateway.ts";
 import {
   startLogsPolling,
@@ -17,7 +20,7 @@ import {
   syncThemeWithSettings,
 } from "./app-settings.ts";
 import { loadControlUiBootstrapConfig } from "./controllers/control-ui-bootstrap.ts";
-import type { Tab } from "./navigation.ts";
+import { isAddonTab, addonTabId } from "./navigation.ts";
 
 type LifecycleHost = {
   basePath: string;
@@ -40,6 +43,9 @@ type LifecycleHost = {
   logsEntries: unknown[];
   popStateHandler: () => void;
   topbarObserver: ResizeObserver | null;
+  themeResolved: "light" | "dark";
+  agentsSelectedId: string | null;
+  agentsList: { defaultId?: string } | null;
 };
 
 export function handleConnected(host: LifecycleHost) {
@@ -114,5 +120,15 @@ export function handleUpdated(host: LifecycleHost, changed: Map<PropertyKey, unk
         changed.has("tab") || changed.has("logsAutoFollow"),
       );
     }
+  }
+  if (isAddonTab(host.tab)) {
+    const ctx: AddonContext = {
+      client: host.client as AddonContext["client"],
+      theme: host.themeResolved,
+      agentId: host.agentsSelectedId ?? host.agentsList?.defaultId ?? null,
+      basePath: host.basePath,
+      navigate: () => {},
+    };
+    ensureAddonMounted(addonTabId(host.tab), ctx);
   }
 }

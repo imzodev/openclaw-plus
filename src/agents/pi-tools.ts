@@ -1,6 +1,9 @@
 import { codingTools, createReadTool, readTool } from "@mariozechner/pi-coding-agent";
 import type { OpenClawConfig } from "../config/config.js";
 import type { ToolLoopDetectionConfig } from "../config/types.tools.js";
+import type { ModelAuthMode } from "./model-auth.js";
+import type { AnyAgentTool } from "./pi-tools.types.js";
+import type { SandboxContext } from "./sandbox.js";
 import { resolveMergedSafeBinProfileFixtures } from "../infra/exec-safe-bin-runtime-policy.js";
 import { logWarn } from "../logger.js";
 import { getPluginToolMeta } from "../plugins/tools.js";
@@ -15,8 +18,18 @@ import {
   type ProcessToolDefaults,
 } from "./bash-tools.js";
 import { listChannelAgentTools } from "./channel-tools.js";
+import {
+  createCodeApplyDiffTool,
+  createSandboxedCodeApplyDiffTool,
+} from "./code-apply-diff-tool.js";
+import { createCodeContextTool, createSandboxedCodeContextTool } from "./code-context-tool.js";
+import { createCodeEditTool, createSandboxedCodeEditTool } from "./code-edit-tool.js";
+import { createCodeOutlineTool, createSandboxedCodeOutlineTool } from "./code-outline-tool.js";
+import { createCodeReadTool, createSandboxedCodeReadTool } from "./code-read-tool.js";
+import { createCodeRunTool } from "./code-run-tool.js";
+import { createCodeSearchTool } from "./code-search-tool.js";
+import { createCodeWriteTool, createSandboxedCodeWriteTool } from "./code-write-tool.js";
 import { resolveImageSanitizationLimits } from "./image-sanitization.js";
-import type { ModelAuthMode } from "./model-auth.js";
 import { createOpenClawTools } from "./openclaw-tools.js";
 import { wrapToolWithAbortSignal } from "./pi-tools.abort.js";
 import { wrapToolWithBeforeToolCallHook } from "./pi-tools.before-tool-call.js";
@@ -41,8 +54,6 @@ import {
   wrapToolParamNormalization,
 } from "./pi-tools.read.js";
 import { cleanToolSchemaForGemini, normalizeToolParameters } from "./pi-tools.schema.js";
-import type { AnyAgentTool } from "./pi-tools.types.js";
-import type { SandboxContext } from "./sandbox.js";
 import { isXaiProvider } from "./schema/clean-for-xai.js";
 import { getSubagentDepthFromSessionStore } from "./subagent-depth.js";
 import { createToolFsPolicy, resolveToolFsConfig } from "./tool-fs-policy.js";
@@ -57,6 +68,76 @@ import {
   resolveToolProfilePolicy,
 } from "./tool-policy.js";
 import { resolveWorkspaceRoot } from "./workspace-dir.js";
+
+/**
+ * Patterns matching the *first* command in a pipeline that indicate code
+ * exploration.  We intentionally do NOT match downstream pipe segments
+ * (e.g. `| head`, `| grep`) because legitimate commands like
+ * `gh pr view … | head -100` would false-positive.
+ */
+const CODE_EXT = String.raw`\.(ts|js|tsx|jsx|py|rs|go|java|c|cpp|h|hpp|rb|php|swift|kt)\b`;
+
+// grep/rg/ack/ag are always code exploration (no file-ext gate needed)
+const ALWAYS_BLOCK_PATTERNS = [/^\s*grep\b/, /^\s*rg\b/, /^\s*ack\b/, /^\s*ag\b/];
+
+// These are only code exploration when targeting source files
+const CODE_FILE_PATTERNS = [
+  new RegExp(String.raw`^\s*find\b.*${CODE_EXT}`),
+  new RegExp(String.raw`^\s*cat\b.*${CODE_EXT}`),
+  new RegExp(String.raw`^\s*head\b.*${CODE_EXT}`),
+  new RegExp(String.raw`^\s*tail\b.*${CODE_EXT}`),
+  new RegExp(String.raw`^\s*sed\b.*${CODE_EXT}`),
+  new RegExp(String.raw`^\s*awk\b.*${CODE_EXT}`),
+  new RegExp(String.raw`^\s*wc\b.*${CODE_EXT}`),
+];
+
+const EXEC_REDIRECT_MESSAGE = [
+  "BLOCKED: Do not use exec for code exploration. Use the dedicated code_* tools instead:",
+  "- To search code: use code_search (not grep/rg/ack)",
+  "- To read code: use code_read (not cat/head/tail)",
+  "- To find files: use code_search with a path filter (not find)",
+  "- To understand file structure: use code_outline",
+  "- To gather context: use code_context",
+  "Retry with the appropriate code_* tool.",
+].join("\n");
+
+export function isCodeExplorationCommand(command: string): boolean {
+  // Strip leading cd ... && or cd ... ; prefix, then take only the first
+  // pipeline segment so downstream pipes (| head, | grep) don't false-positive.
+  const stripped = command.replace(/^\s*cd\s+[^;&|]+(?:&&|[;&])\s*/g, "").trim();
+  const firstSegment = stripped.split("|")[0].trim();
+  if (ALWAYS_BLOCK_PATTERNS.some((p) => p.test(firstSegment))) {
+    return true;
+  }
+  if (CODE_FILE_PATTERNS.some((p) => p.test(firstSegment))) {
+    return true;
+  }
+  return false;
+}
+
+function wrapExecWithCodeToolRedirect(execTool: AnyAgentTool, hasCodeTools: boolean): AnyAgentTool {
+  if (!hasCodeTools || !execTool.execute) {
+    return execTool;
+  }
+  const originalExecute = execTool.execute;
+  return {
+    ...execTool,
+    execute: async (toolCallId, params, signal, onUpdate) => {
+      const command =
+        params && typeof params === "object" && "command" in params
+          ? String((params as { command?: string }).command ?? "")
+          : "";
+      if (command && isCodeExplorationCommand(command)) {
+        return {
+          content: [{ type: "text" as const, text: EXEC_REDIRECT_MESSAGE }],
+          isError: true,
+          details: undefined,
+        };
+      }
+      return originalExecute(toolCallId, params, signal, onUpdate);
+    },
+  };
+}
 
 function isOpenAIProvider(provider?: string) {
   const normalized = provider?.trim().toLowerCase();
@@ -441,6 +522,8 @@ export function createOpenClawCodingTools(options?: {
               : undefined,
           workspaceOnly: applyPatchWorkspaceOnly,
         });
+  // code_* tools are available when not in sandbox or sandbox allows writes
+  const hasCodeTools = sandboxRoot ? !!allowWorkspaceWrites : true;
   const tools: AnyAgentTool[] = [
     ...base,
     ...(sandboxRoot
@@ -468,7 +551,49 @@ export function createOpenClawCodingTools(options?: {
         : []
       : []),
     ...(applyPatchTool ? [applyPatchTool as unknown as AnyAgentTool] : []),
-    execTool as unknown as AnyAgentTool,
+    // code_* tools: coding-optimized edit/write/diff with fuzzy matching and rich errors
+    ...(sandboxRoot
+      ? allowWorkspaceWrites
+        ? [
+            createSandboxedCodeEditTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+            createSandboxedCodeWriteTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+            createSandboxedCodeApplyDiffTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+            createSandboxedCodeOutlineTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+            createSandboxedCodeContextTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+            createSandboxedCodeReadTool({
+              root: sandboxRoot,
+              bridge: sandboxFsBridge!,
+            }) as unknown as AnyAgentTool,
+            createCodeSearchTool(sandboxRoot) as unknown as AnyAgentTool,
+            createCodeRunTool(sandboxRoot) as unknown as AnyAgentTool,
+          ]
+        : []
+      : [
+          createCodeEditTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeWriteTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeApplyDiffTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeOutlineTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeContextTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeReadTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeSearchTool(workspaceRoot) as unknown as AnyAgentTool,
+          createCodeRunTool(workspaceRoot) as unknown as AnyAgentTool,
+        ]),
+    wrapExecWithCodeToolRedirect(execTool as unknown as AnyAgentTool, hasCodeTools),
     processTool as unknown as AnyAgentTool,
     // Channel docking: include channel-defined agent tools (login, etc.).
     ...listChannelAgentTools({ cfg: options?.config }),

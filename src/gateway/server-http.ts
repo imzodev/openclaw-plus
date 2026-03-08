@@ -1,3 +1,5 @@
+import type { TlsOptions } from "node:tls";
+import type { WebSocketServer } from "ws";
 import {
   createServer as createHttpServer,
   type Server as HttpServer,
@@ -5,13 +7,13 @@ import {
   type ServerResponse,
 } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
-import type { TlsOptions } from "node:tls";
-import type { WebSocketServer } from "ws";
+import type { CanvasHostHandler } from "../canvas-host/server.js";
+import type { createSubsystemLogger } from "../logging/subsystem.js";
+import type { ReadinessChecker } from "./server/readiness.js";
+import type { GatewayWsClient } from "./server/ws-types.js";
 import { resolveAgentAvatar } from "../agents/identity-avatar.js";
 import { CANVAS_WS_PATH, handleA2uiHttpRequest } from "../canvas-host/a2ui.js";
-import type { CanvasHostHandler } from "../canvas-host/server.js";
 import { loadConfig } from "../config/config.js";
-import type { createSubsystemLogger } from "../logging/subsystem.js";
 import { safeEqualSecret } from "../security/secret-equal.js";
 import { handleSlackHttpRequest } from "../slack/http/index.js";
 import {
@@ -65,9 +67,8 @@ import {
   type PluginHttpRequestHandler,
   type PluginRoutePathContext,
 } from "./server/plugins-http.js";
-import type { ReadinessChecker } from "./server/readiness.js";
-import type { GatewayWsClient } from "./server/ws-types.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
+import { handleWorkspaceFileHttpRequest } from "./workspace-file-http.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
 
@@ -576,6 +577,7 @@ export function createGatewayHttpServer(opts: {
   strictTransportSecurityHeader?: string;
   handleHooksRequest: HooksRequestHandler;
   handlePluginRequest?: PluginHttpRequestHandler;
+  handleAddonsRequest?: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
   shouldEnforcePluginGatewayAuth?: (pathContext: PluginRoutePathContext) => boolean;
   resolvedAuth: ResolvedGatewayAuth;
   /** Optional rate limiter for auth brute-force protection. */
@@ -601,6 +603,7 @@ export function createGatewayHttpServer(opts: {
     rateLimiter,
     getReadiness,
   } = opts;
+  const handleAddonsRequest = opts.handleAddonsRequest;
   const httpServer: HttpServer = opts.tlsOptions
     ? createHttpsServer(opts.tlsOptions, (req, res) => {
         void handleRequest(req, res);
@@ -733,7 +736,42 @@ export function createGatewayHttpServer(opts: {
           rateLimiter,
         }),
       );
-
+      requestStages.push({
+        name: "workspace-file",
+        run: () =>
+          handleWorkspaceFileHttpRequest(req, res, {
+            auth: resolvedAuth,
+            trustedProxies,
+            rateLimiter,
+          }),
+      });
+      if (handleAddonsRequest) {
+        requestStages.push({
+          name: "addons-auth",
+          run: async () => {
+            if (!requestPath.startsWith("/__openclaw__/addons/")) {
+              return false;
+            }
+            const ok = await authorizeCanvasRequest({
+              req,
+              auth: resolvedAuth,
+              trustedProxies,
+              allowRealIpFallback,
+              clients,
+              rateLimiter,
+            });
+            if (!ok.ok) {
+              sendGatewayAuthFailure(res, ok);
+              return true;
+            }
+            return false;
+          },
+        });
+        requestStages.push({
+          name: "addons-http",
+          run: () => handleAddonsRequest(req, res),
+        });
+      }
       if (controlUiEnabled) {
         requestStages.push({
           name: "control-ui-avatar",

@@ -256,6 +256,8 @@ export type AppViewState = {
     logsMaxBytes: number;
     logsAtBottom: boolean;
     updateAvailable: import("./types.js").UpdateAvailable | null;
+    addonsLoading: boolean;
+    addonsError: string | null;
     client: GatewayBrowserClient | null;
     refreshSessionsAfterChat: Set<string>;
     connect: () => void;
@@ -319,4 +321,5 @@ export type AppViewState = {
     handleOpenSidebar: (content: string) => void;
     handleCloseSidebar: () => void;
     handleSplitRatioChange: (ratio: number) => void;
+    requestUpdate: () => void;
   };

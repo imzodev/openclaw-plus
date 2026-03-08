@@ -1,11 +1,11 @@
 import { createHmac, createHash } from "node:crypto";
 import type { ReasoningLevel, ThinkLevel } from "../auto-reply/thinking.js";
-import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import type { MemoryCitationsMode } from "../config/types.memory.js";
-import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 import type { ResolvedTimeFormat } from "./date-time.js";
 import type { EmbeddedContextFile } from "./pi-embedded-helpers.js";
 import type { EmbeddedSandboxInfo } from "./pi-embedded-runner/types.js";
+import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
+import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 import { sanitizeForPromptLiteral } from "./sanitize-for-prompt.js";
 
 /**
@@ -269,6 +269,24 @@ export function buildAgentSystemPrompt(params: {
     session_status:
       "Show a /status-equivalent status card (usage + time + Reasoning/Verbose/Elevated); use for model-use questions (📊 session_status); optional per-session model override",
     image: "Analyze an image with the configured image model",
+    code_edit:
+      "Smart code edit with fuzzy matching (exact → whitespace-tolerant → token-based). Prefer over edit for code. Always read first.",
+    code_write:
+      "Write a complete code file with post-write syntax validation. Prefer over write for code files.",
+    code_apply_diff:
+      "Apply line-number-anchored SEARCH/REPLACE diff blocks. Supports multiple blocks per call. Always read first to get line numbers.",
+    code_search:
+      "Search code across the workspace with ripgrep. Returns matching lines with file paths, line numbers, and context. Use to find definitions, usages, and patterns.",
+    code_outline:
+      "Extract a structural outline of a source file: functions, classes, methods, types with line numbers. Faster than reading the whole file.",
+    code_context:
+      "Gather rich context around a code location: imports, the focused code block, and symbol references across the workspace.",
+    code_run:
+      "Run build/test/lint commands with structured error extraction. Use after editing to verify changes.",
+    code_read:
+      "Read source files with line numbers. Supports full file, slice (offset+limit), and semantic block extraction (anchor_line auto-expands to the enclosing function/class).",
+    ui_addon:
+      "Create, delete, or list UI addons (custom web panels in the Control UI). Use action='create' with id + code (JS default-exporting an HTMLElement subclass). The addon appears as a new tab in the browser Control UI immediately.",
   };
 
   const toolOrder = [
@@ -276,6 +294,14 @@ export function buildAgentSystemPrompt(params: {
     "write",
     "edit",
     "apply_patch",
+    "code_edit",
+    "code_write",
+    "code_apply_diff",
+    "code_search",
+    "code_outline",
+    "code_context",
+    "code_run",
+    "code_read",
     "grep",
     "find",
     "ls",
@@ -296,6 +322,7 @@ export function buildAgentSystemPrompt(params: {
     "subagents",
     "session_status",
     "image",
+    "ui_addon",
   ];
 
   const rawToolNames = (params.toolNames ?? []).map((tool) => tool.trim());
@@ -458,6 +485,33 @@ export function buildAgentSystemPrompt(params: {
       : []),
     "Do not poll `subagents list` / `sessions_list` in a loop; only check status on-demand (for intervention, debugging, or when explicitly asked).",
     "",
+    // Coding guidance: only emitted when code_* tools are available
+    ...(availableTools.has("code_edit")
+      ? [
+          "## Coding",
+          "When working on **code** (source, config, scripts), prefer the code_* tools over generic tools:",
+          "",
+          "**Context gathering (do this first):**",
+          "- **code_read** instead of read for ANY source/config/script file. It always returns line numbers (needed for code_edit and code_apply_diff). Use anchor_line to auto-expand to the enclosing function/class. Do NOT use the generic read tool for code files.",
+          "- **code_search** instead of grep to find definitions, usages, and patterns across the workspace.",
+          "- **code_outline** to see a file's structure (functions, classes, types with line numbers) without reading every line.",
+          "- **code_context** to gather imports, the focused code block, and symbol references before editing.",
+          "",
+          "**Editing:**",
+          "- **code_edit** over edit — fuzzy matching recovers from minor whitespace/indentation mismatches.",
+          "- **code_write** over write — validates syntax after writing.",
+          "- **code_apply_diff** for multi-site edits in a single file — line-number-anchored SEARCH/REPLACE blocks.",
+          "",
+          "**Verification:**",
+          "- **code_run** after edits to run tests, build, or lint and get structured error output. Fix errors before moving on.",
+          "",
+          "**Workflow:** code_search/code_outline → code_read/code_context → code_edit/code_apply_diff → code_run → repeat if errors.",
+          "",
+          "**IMPORTANT: Do NOT use exec to run grep, find, cat, head, tail, sed, or awk for code exploration.** Use code_search, code_read, code_outline, and code_context instead — they return structured output with line numbers. Reserve exec/code_run for build, test, lint, and other non-search commands.",
+          "Use generic edit/write for non-code files (prose, docs, data).",
+          "",
+        ]
+      : []),
     "## Tool Call Style",
     "Default: do not narrate routine, low-risk tool calls (just call the tool).",
     "Narrate only when it helps: multi-step work, complex/challenging problems, sensitive actions (e.g., deletions), or when the user explicitly asks.",
@@ -489,6 +543,19 @@ export function buildAgentSystemPrompt(params: {
         ].join("\n")
       : "",
     hasGateway && !isMinimal ? "" : "",
+    // UI Addons guidance (only when the tool is available)
+    availableTools.has("ui_addon") && !isMinimal ? "## UI Addons" : "",
+    availableTools.has("ui_addon") && !isMinimal
+      ? [
+          "IMPORTANT: When the user says 'addon' or asks you to build a dashboard, panel, widget, monitor, tracker, or any interactive UI, you MUST use the ui_addon tool with action='create'. NEVER use the write tool to create HTML files for this purpose.",
+          "An addon is a JavaScript ES module that default-exports an HTMLElement subclass. It appears as a tab in the browser Control UI immediately after creation.",
+          "Structure: the code parameter must contain `export default class extends HTMLElement { connectedCallback() { const shadow = this.attachShadow({ mode: 'open' }); /* build UI here */ } }`. Use Shadow DOM for style isolation.",
+          "Context: implement `setContext(ctx)` to receive `ctx.client` (gateway RPC client — call `ctx.client.request(method, params)` for any gateway RPC like 'health', 'sessions.list', 'chat.send'), `ctx.theme` ('light'|'dark'), `ctx.agentId`, `ctx.navigate(tab)`.",
+          "Keep the code self-contained in a single JS string. Inline all styles and logic.",
+          "Example: ui_addon action='create' id='my-panel' name='My Panel' code='export default class extends HTMLElement { connectedCallback() { this.attachShadow({mode:\"open\"}).innerHTML = \"<h1>Hello</h1>\"; } }'",
+        ].join("\n")
+      : "",
+    availableTools.has("ui_addon") && !isMinimal ? "" : "",
     "",
     // Skip model aliases for subagent/none modes
     params.modelAliasLines && params.modelAliasLines.length > 0 && !isMinimal

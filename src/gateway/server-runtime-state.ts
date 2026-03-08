@@ -1,7 +1,5 @@
 import type { Server as HttpServer } from "node:http";
 import { WebSocketServer } from "ws";
-import { CANVAS_HOST_PATH } from "../canvas-host/a2ui.js";
-import { type CanvasHostHandler, createCanvasHostHandler } from "../canvas-host/server.js";
 import type { CliDeps } from "../cli/deps.js";
 import type { createSubsystemLogger } from "../logging/subsystem.js";
 import type { PluginRegistry } from "../plugins/registry.js";
@@ -11,6 +9,14 @@ import type { ResolvedGatewayAuth } from "./auth.js";
 import type { ChatAbortControllerEntry } from "./chat-abort.js";
 import type { ControlUiRootState } from "./control-ui.js";
 import type { HooksConfigResolved } from "./hooks.js";
+import type { DedupeEntry } from "./server-shared.js";
+import type { ReadinessChecker } from "./server/readiness.js";
+import type { GatewayTlsRuntime } from "./server/tls.js";
+import type { GatewayWsClient } from "./server/ws-types.js";
+import { loadAddonRegistry, type AddonRegistry } from "../addons/registry.js";
+import { CANVAS_HOST_PATH } from "../canvas-host/a2ui.js";
+import { type CanvasHostHandler, createCanvasHostHandler } from "../canvas-host/server.js";
+import { createAddonsHttpHandler } from "./addons-http.js";
 import { isLoopbackHost, resolveGatewayListenHosts } from "./net.js";
 import {
   createGatewayBroadcaster,
@@ -24,7 +30,6 @@ import {
 } from "./server-chat.js";
 import { MAX_PAYLOAD_BYTES } from "./server-constants.js";
 import { attachGatewayUpgradeHandler, createGatewayHttpServer } from "./server-http.js";
-import type { DedupeEntry } from "./server-shared.js";
 import { createGatewayHooksRequestHandler } from "./server/hooks.js";
 import { listenGatewayHttpServer } from "./server/http-listen.js";
 import {
@@ -32,9 +37,6 @@ import {
   shouldEnforceGatewayAuthForPluginPath,
   type PluginRoutePathContext,
 } from "./server/plugins-http.js";
-import type { ReadinessChecker } from "./server/readiness.js";
-import type { GatewayTlsRuntime } from "./server/tls.js";
-import type { GatewayWsClient } from "./server/ws-types.js";
 
 export async function createGatewayRuntimeState(params: {
   cfg: import("../config/config.js").OpenClawConfig;
@@ -85,6 +87,8 @@ export async function createGatewayRuntimeState(params: {
   ) => ChatRunEntry | undefined;
   chatAbortControllers: Map<string, ChatAbortControllerEntry>;
   toolEventRecipients: ReturnType<typeof createToolEventRecipientRegistry>;
+  addonRegistry: AddonRegistry;
+  refreshAddonRegistry: () => AddonRegistry;
 }> {
   let canvasHost: CanvasHostHandler | null = null;
   if (params.canvasHostEnabled) {
@@ -126,6 +130,15 @@ export async function createGatewayRuntimeState(params: {
     return shouldEnforceGatewayAuthForPluginPath(params.pluginRegistry, pathContext);
   };
 
+  let addonRegistry: AddonRegistry = loadAddonRegistry();
+  const refreshAddonRegistry = () => {
+    addonRegistry = loadAddonRegistry();
+    return addonRegistry;
+  };
+  const handleAddonsRequest = createAddonsHttpHandler({
+    getRegistry: () => addonRegistry,
+  });
+
   const bindHosts = await resolveGatewayListenHosts(params.bindHost);
   if (!isLoopbackHost(params.bindHost)) {
     params.log.warn(
@@ -155,6 +168,7 @@ export async function createGatewayRuntimeState(params: {
       strictTransportSecurityHeader: params.strictTransportSecurityHeader,
       handleHooksRequest,
       handlePluginRequest,
+      handleAddonsRequest,
       shouldEnforcePluginGatewayAuth,
       resolvedAuth: params.resolvedAuth,
       rateLimiter: params.rateLimiter,
@@ -227,5 +241,7 @@ export async function createGatewayRuntimeState(params: {
     removeChatRun,
     chatAbortControllers,
     toolEventRecipients,
+    addonRegistry,
+    refreshAddonRegistry,
   };
 }
