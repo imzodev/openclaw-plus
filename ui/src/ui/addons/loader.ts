@@ -1,5 +1,5 @@
-import type { AddonDefinition } from "./types.ts";
 import { clearAddonAuthCookie, resolveAddonAuthHeader, setAddonAuthCookie } from "./auth.ts";
+import type { AddonDefinition } from "./types.ts";
 
 const loadedModules = new Map<string, typeof HTMLElement>();
 const loadErrors = new Map<string, string>();
@@ -35,9 +35,6 @@ export async function loadAddonElement(
       setAddonAuthCookie(basePath, authHeader);
     }
     const mod = await import(/* @vite-ignore */ url);
-    if (authHeader) {
-      clearAddonAuthCookie(basePath);
-    }
     const exported = mod.default ?? mod;
 
     if (typeof exported === "function" && exported.prototype instanceof HTMLElement) {
