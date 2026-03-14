@@ -1,8 +1,8 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { ref, createRef, type Ref } from "lit/directives/ref.js";
-import type { AddonContext, AddonDefinition } from "./types.ts";
 import { loadAddonElement } from "./loader.ts";
 import { getAddonById } from "./registry.ts";
+import type { AddonContext, AddonDefinition } from "./types.ts";
 
 type AddonHostState = {
   addonId: string;
@@ -97,7 +97,7 @@ async function loadAndMount(
   context: AddonContext,
   onStateChange: () => void,
 ): Promise<void> {
-  const result = await loadAddonElement(addon, context.basePath);
+  const result = await loadAddonElement(addon, context.basePath, context.authHeader);
   if ("error" in result) {
     state.status = "error";
     state.error = result.error;

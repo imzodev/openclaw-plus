@@ -7,6 +7,7 @@ const loadErrors = new Map<string, string>();
 export async function loadAddonElement(
   addon: AddonDefinition,
   basePath: string,
+  authHeader: string | null,
 ): Promise<{ element: typeof HTMLElement } | { error: string }> {
   if (addon.element) {
     return { element: addon.element };
@@ -30,9 +31,9 @@ export async function loadAddonElement(
 
   const url = `${basePath}${addon.entryUrl}`;
   try {
-    const authHeader = await resolveAddonAuthHeader();
-    if (authHeader) {
-      setAddonAuthCookie(basePath, authHeader);
+    const resolvedAuthHeader = await resolveAddonAuthHeader(authHeader);
+    if (resolvedAuthHeader) {
+      setAddonAuthCookie(basePath, resolvedAuthHeader);
     }
     const mod = await import(/* @vite-ignore */ url);
     const exported = mod.default ?? mod;

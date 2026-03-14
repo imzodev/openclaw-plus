@@ -5,6 +5,7 @@ export type AddonContext = {
   theme: "light" | "dark";
   agentId: string | null;
   basePath: string;
+  authHeader: string | null;
   navigate: (tab: string) => void;
 };
 

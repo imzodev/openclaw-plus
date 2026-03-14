@@ -1940,11 +1940,21 @@ export function renderApp(state: AppViewState) {
 }
 
 function addonContext(state: AppViewState, basePath: string): AddonContext {
+  const deviceToken = state.hello?.auth?.deviceToken?.trim();
+  const token = state.settings.token.trim();
+  const password = state.password.trim();
   return {
     client: state.client!,
     theme: state.themeResolved,
     agentId: state.agentsSelectedId ?? state.agentsList?.defaultId ?? null,
     basePath,
+    authHeader: deviceToken
+      ? `Bearer ${deviceToken}`
+      : token
+        ? `Bearer ${token}`
+        : password
+          ? `Bearer ${password}`
+          : null,
     navigate: (tab) => state.setTab(tab as Tab),
   };
 }

@@ -4,7 +4,13 @@ import { loadSettings } from "../storage.ts";
 
 const ADDON_AUTH_COOKIE_NAME = "openclaw_addon_token";
 
-export async function resolveAddonAuthHeader(): Promise<string | null> {
+export async function resolveAddonAuthHeader(
+  preferredAuthHeader?: string | null,
+): Promise<string | null> {
+  const explicit = preferredAuthHeader?.trim();
+  if (explicit) {
+    return explicit;
+  }
   const settingsToken = loadSettings().token.trim();
   if (settingsToken) {
     return `Bearer ${settingsToken}`;
