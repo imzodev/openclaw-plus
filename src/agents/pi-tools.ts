@@ -1,9 +1,6 @@
 import { codingTools, createReadTool, readTool } from "@mariozechner/pi-coding-agent";
 import type { OpenClawConfig } from "../config/config.js";
 import type { ToolLoopDetectionConfig } from "../config/types.tools.js";
-import type { ModelAuthMode } from "./model-auth.js";
-import type { AnyAgentTool } from "./pi-tools.types.js";
-import type { SandboxContext } from "./sandbox.js";
 import { resolveMergedSafeBinProfileFixtures } from "../infra/exec-safe-bin-runtime-policy.js";
 import { logWarn } from "../logger.js";
 import { getPluginToolMeta } from "../plugins/tools.js";
@@ -30,6 +27,7 @@ import { createCodeRunTool } from "./code-run-tool.js";
 import { createCodeSearchTool } from "./code-search-tool.js";
 import { createCodeWriteTool, createSandboxedCodeWriteTool } from "./code-write-tool.js";
 import { resolveImageSanitizationLimits } from "./image-sanitization.js";
+import type { ModelAuthMode } from "./model-auth.js";
 import { createOpenClawTools } from "./openclaw-tools.js";
 import { wrapToolWithAbortSignal } from "./pi-tools.abort.js";
 import { wrapToolWithBeforeToolCallHook } from "./pi-tools.before-tool-call.js";
@@ -37,7 +35,7 @@ import {
   isToolAllowedByPolicies,
   resolveEffectiveToolPolicy,
   resolveGroupToolPolicy,
-  resolveSubagentToolPolicy,
+  resolveSubagentToolPolicyForSession,
 } from "./pi-tools.policy.js";
 import {
   assertRequiredParams,
@@ -49,13 +47,15 @@ import {
   createSandboxedWriteTool,
   normalizeToolParams,
   patchToolSchemaForClaudeCompatibility,
+  wrapToolMemoryFlushAppendOnlyWrite,
   wrapToolWorkspaceRootGuard,
   wrapToolWorkspaceRootGuardWithOptions,
   wrapToolParamNormalization,
 } from "./pi-tools.read.js";
 import { cleanToolSchemaForGemini, normalizeToolParameters } from "./pi-tools.schema.js";
+import type { AnyAgentTool } from "./pi-tools.types.js";
+import type { SandboxContext } from "./sandbox.js";
 import { isXaiProvider } from "./schema/clean-for-xai.js";
-import { getSubagentDepthFromSessionStore } from "./subagent-depth.js";
 import { createToolFsPolicy, resolveToolFsConfig } from "./tool-fs-policy.js";
 import {
   applyToolPolicyPipeline,
@@ -148,6 +148,7 @@ const TOOL_DENY_BY_MESSAGE_PROVIDER: Readonly<Record<string, readonly string[]>>
   voice: ["tts"],
 };
 const TOOL_DENY_FOR_XAI_PROVIDERS = new Set(["web_search"]);
+const MEMORY_FLUSH_ALLOWED_TOOL_NAMES = new Set(["read", "write"]);
 
 function normalizeMessageProvider(messageProvider?: string): string | undefined {
   const normalized = messageProvider?.trim().toLowerCase();
@@ -288,8 +289,19 @@ export function createOpenClawCodingTools(options?: {
   sessionId?: string;
   /** Stable run identifier for this agent invocation. */
   runId?: string;
+  /** What initiated this run (for trigger-specific tool restrictions). */
+  trigger?: string;
+  /** Relative workspace path that memory-triggered writes may append to. */
+  memoryFlushWritePath?: string;
   agentDir?: string;
   workspaceDir?: string;
+  /**
+   * Workspace directory that spawned subagents should inherit.
+   * When sandboxing uses a copied workspace (`ro` or `none`), workspaceDir is the
+   * sandbox copy but subagents should inherit the real agent workspace instead.
+   * Defaults to workspaceDir when not set.
+   */
+  spawnWorkspaceDir?: string;
   config?: OpenClawConfig;
   abortSignal?: AbortSignal;
   /**
@@ -336,9 +348,16 @@ export function createOpenClawCodingTools(options?: {
   disableMessageTool?: boolean;
   /** Whether the sender is an owner (required for owner-only tools). */
   senderIsOwner?: boolean;
+  /** Callback invoked when sessions_yield tool is called. */
+  onYield?: (message: string) => Promise<void> | void;
 }): AnyAgentTool[] {
   const execToolName = "exec";
   const sandbox = options?.sandbox?.enabled ? options.sandbox : undefined;
+  const isMemoryFlushRun = options?.trigger === "memory";
+  if (isMemoryFlushRun && !options?.memoryFlushWritePath) {
+    throw new Error("memoryFlushWritePath required for memory-triggered tool runs");
+  }
+  const memoryFlushWritePath = isMemoryFlushRun ? options.memoryFlushWritePath : undefined;
   const {
     agentId,
     globalPolicy,
@@ -384,10 +403,7 @@ export function createOpenClawCodingTools(options?: {
     options?.exec?.scopeKey ?? options?.sessionKey ?? (agentId ? `agent:${agentId}` : undefined);
   const subagentPolicy =
     isSubagentSessionKey(options?.sessionKey) && options?.sessionKey
-      ? resolveSubagentToolPolicy(
-          options.config,
-          getSubagentDepthFromSessionStore(options.sessionKey, { cfg: options.config }),
-        )
+      ? resolveSubagentToolPolicyForSession(options.config, options.sessionKey)
       : undefined;
   const allowBackground = isToolAllowedByPolicies("process", [
     profilePolicyWithAlsoAllow,
@@ -403,7 +419,7 @@ export function createOpenClawCodingTools(options?: {
   const execConfig = resolveExecConfig({ cfg: options?.config, agentId });
   const fsConfig = resolveToolFsConfig({ cfg: options?.config, agentId });
   const fsPolicy = createToolFsPolicy({
-    workspaceOnly: fsConfig.workspaceOnly,
+    workspaceOnly: isMemoryFlushRun || fsConfig.workspaceOnly,
   });
   const sandboxRoot = sandbox?.workspaceDir;
   const sandboxFsBridge = sandbox?.fsBridge;
@@ -613,6 +629,9 @@ export function createOpenClawCodingTools(options?: {
       sandboxFsBridge,
       fsPolicy,
       workspaceDir: workspaceRoot,
+      spawnWorkspaceDir: options?.spawnWorkspaceDir
+        ? resolveWorkspaceRoot(options.spawnWorkspaceDir)
+        : undefined,
       sandboxed: !!sandbox,
       config: options?.config,
       pluginToolAllowlist: collectExplicitAllowlist([
@@ -638,9 +657,35 @@ export function createOpenClawCodingTools(options?: {
       requesterSenderId: options?.senderId,
       senderIsOwner: options?.senderIsOwner,
       sessionId: options?.sessionId,
+      onYield: options?.onYield,
     }),
   ];
-  const toolsForMessageProvider = applyMessageProviderToolPolicy(tools, options?.messageProvider);
+  const toolsForMemoryFlush =
+    isMemoryFlushRun && memoryFlushWritePath
+      ? tools.flatMap((tool) => {
+          if (!MEMORY_FLUSH_ALLOWED_TOOL_NAMES.has(tool.name)) {
+            return [];
+          }
+          if (tool.name === "write") {
+            return [
+              wrapToolMemoryFlushAppendOnlyWrite(tool, {
+                root: sandboxRoot ?? workspaceRoot,
+                relativePath: memoryFlushWritePath,
+                containerWorkdir: sandbox?.containerWorkdir,
+                sandbox:
+                  sandboxRoot && sandboxFsBridge
+                    ? { root: sandboxRoot, bridge: sandboxFsBridge }
+                    : undefined,
+              }),
+            ];
+          }
+          return [tool];
+        })
+      : tools;
+  const toolsForMessageProvider = applyMessageProviderToolPolicy(
+    toolsForMemoryFlush,
+    options?.messageProvider,
+  );
   const toolsForModelProvider = applyModelProviderToolPolicy(toolsForMessageProvider, {
     modelProvider: options?.modelProvider,
     modelId: options?.modelId,

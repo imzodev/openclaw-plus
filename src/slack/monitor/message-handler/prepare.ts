@@ -1,3 +1,4 @@
+import type { WebClient as SlackWebClient } from "@slack/web-api";
 import { resolveAckReaction } from "../../../agents/identity.js";
 import { hasControlCommand } from "../../../auto-reply/command-detection.js";
 import { shouldHandleTextCommands } from "../../../auto-reply/commands-registry.js";
@@ -144,6 +145,7 @@ async function resolveSlackConversationContext(params: {
         channels: ctx.channelsConfig,
         channelKeys: ctx.channelsConfigKeys,
         defaultRequireMention: ctx.defaultRequireMention,
+        allowNameMatching: ctx.allowNameMatching,
       })
     : null;
   const allowBots =
@@ -227,7 +229,7 @@ async function authorizeSlackInboundMessage(params: {
       sendPairingReply: async (text) => {
         await sendMessageSlack(message.channel, text, {
           token: ctx.botToken,
-          client: ctx.app.client,
+          client: ctx.app.client as unknown as SlackWebClient,
           accountId: account.accountId,
         });
       },
@@ -516,7 +518,7 @@ export async function prepareSlackMessage(params: {
       ? await resolveSlackThreadStarter({
           channelId: message.channel,
           threadTs,
-          client: ctx.app.client,
+          client: ctx.app.client as unknown as SlackWebClient,
         })
       : null;
   const resolvedMessageContent = await resolveSlackMessageContent({
@@ -558,7 +560,7 @@ export async function prepareSlackMessage(params: {
     shouldAckReaction() && ackReactionMessageTs && ackReactionValue
       ? reactSlackMessage(message.channel, ackReactionMessageTs, ackReactionValue, {
           token: ctx.botToken,
-          client: ctx.app.client,
+          client: ctx.app.client as unknown as SlackWebClient,
         }).then(
           () => true,
           (err) => {

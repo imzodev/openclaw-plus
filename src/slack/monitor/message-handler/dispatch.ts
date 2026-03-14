@@ -1,3 +1,4 @@
+import type { WebClient as SlackWebClient } from "@slack/web-api";
 import { resolveHumanDelayConfig } from "../../../agents/identity.js";
 import { dispatchInboundMessage } from "../../../auto-reply/dispatch.js";
 import { clearHistoryEntriesIfEnabled } from "../../../auto-reply/reply/history.js";
@@ -152,7 +153,7 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
       if (typingReaction && message.ts) {
         await reactSlackMessage(message.channel, message.ts, typingReaction, {
           token: ctx.botToken,
-          client: ctx.app.client,
+          client: ctx.app.client as unknown as SlackWebClient,
         }).catch(() => {});
       }
     },
@@ -169,7 +170,7 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
       if (typingReaction && message.ts) {
         await removeSlackReaction(message.channel, message.ts, typingReaction, {
           token: ctx.botToken,
-          client: ctx.app.client,
+          client: ctx.app.client as unknown as SlackWebClient,
         }).catch(() => {});
       }
     },
@@ -266,7 +267,7 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
         }
 
         streamSession = await startSlackStream({
-          client: ctx.app.client,
+          client: ctx.app.client as unknown as SlackWebClient,
           channel: message.channel,
           threadTs: streamThreadTs,
           text,
@@ -508,7 +509,7 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
         prepared.ackReactionValue,
         {
           token: ctx.botToken,
-          client: ctx.app.client,
+          client: ctx.app.client as unknown as SlackWebClient,
         },
       ),
     onError: (err) => {

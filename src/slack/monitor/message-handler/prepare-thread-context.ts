@@ -1,3 +1,4 @@
+import type { WebClient as SlackWebClient } from "@slack/web-api";
 import { formatInboundEnvelope } from "../../../auto-reply/envelope.js";
 import { readSessionUpdatedAt } from "../../../config/sessions.js";
 import { logVerbose } from "../../../globals.js";
@@ -80,7 +81,7 @@ export async function resolveSlackThreadContextData(params: {
     const threadHistory = await resolveSlackThreadHistory({
       channelId: params.message.channel,
       threadTs: params.threadTs,
-      client: params.ctx.app.client,
+      client: params.ctx.app.client as unknown as SlackWebClient,
       currentMessageTs: params.message.ts,
       limit: threadInitialHistoryLimit,
     });

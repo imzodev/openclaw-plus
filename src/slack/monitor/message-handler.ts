@@ -172,7 +172,11 @@ export function createSlackMessageHandler(params: {
       ctx.runtime.error?.(`slack inbound debounce flush failed: ${String(err)}`);
     },
   });
-  const threadTsResolver = createSlackThreadTsResolver({ client: ctx.app.client });
+  const threadTsResolver = createSlackThreadTsResolver({
+    client: ctx.app.client as unknown as Parameters<
+      typeof createSlackThreadTsResolver
+    >[0]["client"],
+  });
   const pendingTopLevelDebounceKeys = new Map<string, Set<string>>();
   const appMentionRetryKeys = new Map<string, number>();
   const appMentionDispatchedKeys = new Map<string, number>();

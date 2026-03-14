@@ -1,15 +1,10 @@
 import path from "node:path";
-import type { CanvasHostServer } from "../canvas-host/server.js";
-import type { PluginServicesHandle } from "../plugins/services.js";
-import type { RuntimeEnv } from "../runtime.js";
-import type { CommandSecretAssignment } from "../secrets/command-config.js";
-import type { ControlUiRootState } from "./control-ui.js";
-import type { startBrowserControlServerIfEnabled } from "./server-browser.js";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { getActiveEmbeddedRunCount } from "../agents/pi-embedded-runner/runs.js";
 import { registerSkillsChangeListener } from "../agents/skills/refresh.js";
 import { initSubagentRegistry } from "../agents/subagent-registry.js";
 import { getTotalPendingReplies } from "../auto-reply/reply/dispatcher-registry.js";
+import type { CanvasHostServer } from "../canvas-host/server.js";
 import { type ChannelId, listChannelPlugins } from "../channels/plugins/index.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import { createDefaultDeps } from "../cli/deps.js";
@@ -29,6 +24,7 @@ import { resolveMainSessionKey } from "../config/sessions.js";
 import { clearAgentRunContext, onAgentEvent } from "../infra/agent-events.js";
 import {
   ensureControlUiAssetsBuilt,
+  isPackageProvenControlUiRootSync,
   resolveControlUiRootOverrideSync,
   resolveControlUiRootSync,
 } from "../infra/control-ui-assets.js";
@@ -52,7 +48,10 @@ import { createSubsystemLogger, runtimeForLogger } from "../logging/subsystem.js
 import { getGlobalHookRunner, runGlobalGatewayStopSafely } from "../plugins/hook-runner-global.js";
 import { createEmptyPluginRegistry } from "../plugins/registry.js";
 import { createPluginRuntime } from "../plugins/runtime/index.js";
+import type { PluginServicesHandle } from "../plugins/services.js";
 import { getTotalQueueSize } from "../process/command-queue.js";
+import type { RuntimeEnv } from "../runtime.js";
+import type { CommandSecretAssignment } from "../secrets/command-config.js";
 import {
   GATEWAY_AUTH_SURFACE_PATHS,
   evaluateGatewayAuthSurfaceStates,
@@ -68,12 +67,14 @@ import { runOnboardingWizard } from "../wizard/onboarding.js";
 import { createAuthRateLimiter, type AuthRateLimiter } from "./auth-rate-limit.js";
 import { startChannelHealthMonitor } from "./channel-health-monitor.js";
 import { startGatewayConfigReloader } from "./config-reload.js";
+import type { ControlUiRootState } from "./control-ui.js";
 import {
   GATEWAY_EVENT_UPDATE_AVAILABLE,
   type GatewayUpdateAvailableEventPayload,
 } from "./events.js";
 import { ExecApprovalManager } from "./exec-approval-manager.js";
 import { NodeRegistry } from "./node-registry.js";
+import type { startBrowserControlServerIfEnabled } from "./server-browser.js";
 import { createChannelManager } from "./server-channels.js";
 import { createAgentEventHandler } from "./server-chat.js";
 import { createGatewayCloseHandler } from "./server-close.js";
@@ -106,6 +107,7 @@ import {
   incrementPresenceVersion,
   refreshGatewayHealthSnapshot,
 } from "./server/health-state.js";
+import { resolveHookClientIpConfig } from "./server/hooks.js";
 import { createReadinessChecker } from "./server/readiness.js";
 import { loadGatewayTlsRuntime } from "./server/tls.js";
 import {
@@ -510,6 +512,7 @@ export async function startGatewayServer(
     tailscaleMode,
   } = runtimeConfig;
   let hooksConfig = runtimeConfig.hooksConfig;
+  let hookClientIpConfig = resolveHookClientIpConfig(cfgAtStart);
   const canvasHostEnabled = runtimeConfig.canvasHostEnabled;
 
   // Create auth rate limiters used by connect/auth flows.
@@ -545,7 +548,16 @@ export async function startGatewayServer(
       });
     }
     controlUiRootState = resolvedRoot
-      ? { kind: "resolved", path: resolvedRoot }
+      ? {
+          kind: isPackageProvenControlUiRootSync(resolvedRoot, {
+            moduleUrl: import.meta.url,
+            argv1: process.argv[1],
+            cwd: process.cwd(),
+          })
+            ? "bundled"
+            : "resolved",
+          path: resolvedRoot,
+        }
       : { kind: "missing" };
   }
 
@@ -605,6 +617,7 @@ export async function startGatewayServer(
     rateLimiter: authRateLimiter,
     gatewayTls,
     hooksConfig: () => hooksConfig,
+    getHookClientIpConfig: () => hookClientIpConfig,
     pluginRegistry,
     deps,
     canvasRuntime,
@@ -948,6 +961,7 @@ export async function startGatewayServer(
           broadcast,
           getState: () => ({
             hooksConfig,
+            hookClientIpConfig,
             heartbeatRunner,
             cronState,
             browserControl,
@@ -955,6 +969,7 @@ export async function startGatewayServer(
           }),
           setState: (nextState) => {
             hooksConfig = nextState.hooksConfig;
+            hookClientIpConfig = nextState.hookClientIpConfig;
             heartbeatRunner = nextState.heartbeatRunner;
             cronState = nextState.cronState;
             cron = cronState.cron;
